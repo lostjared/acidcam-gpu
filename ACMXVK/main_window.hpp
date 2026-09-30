@@ -156,6 +156,7 @@ namespace acmxvk {
         std::size_t shader_index = 0;
         std::size_t playlist_index = 0;
         std::size_t crossfade_post_process_index = std::numeric_limits<std::size_t>::max();
+        std::size_t photosensitivity_mitigation_post_process_index = std::numeric_limits<std::size_t>::max();
         bool effects_enabled = true;
         bool multipass_enabled = false;
         bool effect_pack_enabled = false;

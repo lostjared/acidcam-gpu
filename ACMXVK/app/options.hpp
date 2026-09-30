@@ -78,6 +78,7 @@ namespace acmxvk {
         double random_dream_interval = 0.0;
         double stable_diffusion_strength = 0.35;
         double stable_diffusion_cfg_scale = 5.0;
+        double photosensitivity_mitigation_strength = 0.45;
         bool resolution_specified = false;
         bool use_yuv = false;
         bool maximize_fps = false;
@@ -102,6 +103,7 @@ namespace acmxvk {
         bool fill_pts_gaps = false;
         bool copy_audio = false;
         bool photosensitivity_warning = false;
+        bool photosensitivity_mitigation = false;
         bool mute_output = false;
         bool enable_audio = false;
         bool enable_audio_time = false;

@@ -437,6 +437,10 @@ class MainWindow : public QMainWindow {
     int watermark_g = 0;
     int watermark_b = 150;
     bool display_filter_enabled = false;
+    bool photosensitivity_mitigation_enabled = false;
+    double photosensitivity_mitigation_strength = 0.45;
+    QAction *photosensitivityMitigationAction = nullptr;
+    QAction *photosensitivityMitigationStrengthAction = nullptr;
     QString extra_arguments;
     QAction *watermarkAction = nullptr;
     QAction *displayFilterAction = nullptr;

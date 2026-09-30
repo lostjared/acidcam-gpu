@@ -77,6 +77,8 @@ namespace acmxvk {
 
     struct InterfaceState {
         std::uint32_t sequence = 0;
+        bool photosensitivity_mitigation_enabled = false;
+        float photosensitivity_mitigation_strength = 0.45F;
         std::string selected_shader_name;
         InterfaceMultipassState multipass;
         std::vector<InterfaceUniformValue> uniform_values;

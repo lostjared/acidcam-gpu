@@ -53,6 +53,22 @@
 #define ACMXVK_INSTALL_PASSTHROUGH_SHADER "passthrough.frag.spv"
 #endif
 
+#ifndef ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_SHADER
+#define ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_SHADER "photosensitivity_mitigation.comp.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_SHADER
+#define ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_SHADER "photosensitivity_mitigation.comp.spv"
+#endif
+
+#ifndef ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER
+#define ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER "photosensitivity_mitigation_hdr.comp.spv"
+#endif
+
+#ifndef ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER
+#define ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER "photosensitivity_mitigation_hdr.comp.spv"
+#endif
+
 #ifndef ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER
 #define ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER "sd_upscale.comp.spv"
 #endif
@@ -208,6 +224,11 @@ namespace acmxvk {
     fs::path flip_shader_path(const Options &options) { return resolve_resource(options, "shaders/flip.frag.spv", ACMXVK_INSTALL_FLIP_SHADER, ACMXVK_BUILD_FLIP_SHADER); }
 
     fs::path passthrough_shader_path(const Options &options) { return resolve_resource(options, "shaders/passthrough.frag.spv", ACMXVK_INSTALL_PASSTHROUGH_SHADER, ACMXVK_BUILD_PASSTHROUGH_SHADER); }
+
+    fs::path photosensitivity_mitigation_shader_path(const Options &options, bool hdr) {
+        return hdr ? resolve_resource(options, "shaders/photosensitivity_mitigation_hdr.comp.spv", ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER, ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER)
+                   : resolve_resource(options, "shaders/photosensitivity_mitigation.comp.spv", ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_SHADER, ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_SHADER);
+    }
 
     fs::path stable_diffusion_upscale_shader_path(const Options &options) { return resolve_resource(options, "shaders/sd_upscale.comp.spv", ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER, ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER); }
 

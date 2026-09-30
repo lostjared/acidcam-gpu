@@ -1277,6 +1277,17 @@ namespace acmxvk {
                 option_handled = true;
                 options.photosensitivity_warning = true;
             }
+            if (option == "--photosensitivity-mitigation") {
+                option_handled = true;
+                options.photosensitivity_mitigation = true;
+            }
+            if (option == "--photosensitivity-mitigation-strength") {
+                option_handled = true;
+                options.photosensitivity_mitigation_strength = parseNumber(optionValue(index, argc, argv, option), option);
+                if (!std::isfinite(options.photosensitivity_mitigation_strength) || options.photosensitivity_mitigation_strength < 0.0 || options.photosensitivity_mitigation_strength > 1.0) {
+                    throw std::runtime_error("--photosensitivity-mitigation-strength must be between 0 and 1");
+                }
+            }
             if (option == "--mute-output") {
                 option_handled = true;
                 options.mute_output = true;
@@ -1711,6 +1722,8 @@ namespace acmxvk {
                << "  -H, --shader-index <index>  Initial library shader index\n"
                << "      --shader-file <name>    Initial library shader filename\n"
                << "      --uniform <name=value>  Override a library.json custom float\n\n"
+               << "      --photosensitivity-mitigation  Append built-in final mitigation compute pass\n"
+               << "      --photosensitivity-mitigation-strength <0..1>  Strength (default 0.45)\n\n"
                << "3D model:\n"
                << "      --enable-3d             Map input frames onto a 3D model\n"
                << "      --model <file>          OBJ, MXMOD, or compressed MXMOD model\n"

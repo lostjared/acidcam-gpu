@@ -2139,6 +2139,8 @@ namespace acmxvk {
             apply_interface_uniform_values(state.uniform_values);
         }
         apply_interface_playback_state(state.playback, false);
+        options.photosensitivity_mitigation_strength = state.photosensitivity_mitigation_strength;
+        options.photosensitivity_mitigation = state.photosensitivity_mitigation_enabled;
         apply_interface_overlay_state(state.overlay, false);
         apply_interface_gpu_filter_state(state.gpu_filters, false);
         if (effect_pack_request_accepted && uniform_target_matches && !effect_pack_request_processed) {
@@ -2192,6 +2194,11 @@ namespace acmxvk {
             apply_interface_uniform_values(state.uniform_values);
         }
         apply_interface_playback_state(state.playback, true);
+        options.photosensitivity_mitigation_strength = state.photosensitivity_mitigation_strength;
+        if (options.photosensitivity_mitigation != state.photosensitivity_mitigation_enabled) {
+            options.photosensitivity_mitigation = state.photosensitivity_mitigation_enabled;
+            applyShaderPipeline();
+        }
         apply_interface_overlay_state(state.overlay, true);
         apply_interface_gpu_filter_state(state.gpu_filters, true);
         if (effect_pack_request_accepted && uniform_target_matches && !effect_pack_request_processed) {
@@ -4918,6 +4925,17 @@ namespace acmxvk {
         if (options.human_background) {
             pipeline.emplace_back(human_composite_shader_path(options));
         }
+        if (options.photosensitivity_mitigation) {
+            const fs::path mitigation = photosensitivity_mitigation_shader_path(options, hdr_input_precision_enabled);
+            try {
+                if (!fs::is_regular_file(mitigation) || mxvk::inspect_spirv(mxvk::load_spv(mitigation.string())).stage != mxvk::ShaderStage::Compute) {
+                    throw std::runtime_error("built-in compute shader is missing or invalid: " + mitigation.string());
+                }
+                pipeline.emplace_back(mitigation);
+            } catch (const std::exception &error) {
+                std::cerr << "acmxvk: Photosensitivity Mitigation unavailable: " << error.what() << '\n';
+            }
+        }
         for (fs::path &shader : pipeline)
             shader = resolvedShaderPath(shader);
         return pipeline;
@@ -4976,6 +4994,14 @@ namespace acmxvk {
             pipeline.insert(pipeline.begin(), hdr_transfer_shader_path(options, hdr_transfer_hlg, false));
             pipeline.emplace_back(hdr_transfer_shader_path(options, hdr_transfer_hlg, true));
         }
+        if (options.photosensitivity_mitigation) {
+            const fs::path mitigation = photosensitivity_mitigation_shader_path(options, hdr_input_precision_enabled);
+            const auto selected = std::find(pipeline.begin(), pipeline.end(), mitigation);
+            if (selected != pipeline.end()) {
+                pipeline.erase(selected);
+                pipeline.emplace_back(mitigation);
+            }
+        }
         if (pipeline.empty()) {
             return;
         }
@@ -5004,7 +5030,24 @@ namespace acmxvk {
             }
             effects.push_back(effect);
         }
-        post_process_sprites = attachPostProcessingShaders(effects);
+        photosensitivity_mitigation_post_process_index = std::numeric_limits<std::size_t>::max();
+        const fs::path mitigation = photosensitivity_mitigation_shader_path(options, hdr_input_precision_enabled);
+        const bool mitigation_appended = options.photosensitivity_mitigation && !pipeline.empty() && pipeline.back() == mitigation;
+        try {
+            post_process_sprites = attachPostProcessingShaders(effects);
+            if (mitigation_appended) {
+                photosensitivity_mitigation_post_process_index = post_process_sprites.size() - 1U;
+            }
+        } catch (const std::exception &error) {
+            if (!mitigation_appended) {
+                throw;
+            }
+            std::cerr << "acmxvk: Photosensitivity Mitigation failed to initialize: " << error.what() << '\n';
+            detachPostProcessingShader();
+            pipeline.pop_back();
+            effects.pop_back();
+            post_process_sprites = attachPostProcessingShaders(effects);
+        }
         for (mxvk::VK_Sprite *sprite : post_process_sprites) {
             sprite->enableExtendedUBO();
             sprite->setCustomUniforms(custom_uniform_values);
@@ -5848,7 +5891,8 @@ namespace acmxvk {
             } else {
                 setPostProcessingShaderParams(index, 1.0F, 1.0F, 1.0F, elapsed);
             }
-            sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F);
+            sprite->setMouseState(mouse_x, mouse_y, mouse_pressed ? 1.0F : 0.0F,
+                                  index == photosensitivity_mitigation_post_process_index ? static_cast<float>(options.photosensitivity_mitigation_strength) : 0.0F);
             sprite->setUniform0(legacy_alpha, compatibility_time, static_cast<float>(width), static_cast<float>(height));
             sprite->setUniform1(delta, audio_amplitude, audio_frequency, frame_rate);
             sprite->setUniform2(shader_frame, elapsed, audio_sample_rate, audio_peak);

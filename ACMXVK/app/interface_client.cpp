@@ -204,6 +204,8 @@ namespace acmxvk {
         impl->read_error_reported = false;
 
         InterfaceState next;
+        next.photosensitivity_mitigation_enabled = impl->selection->photosensitivity_mitigation_enabled != 0;
+        next.photosensitivity_mitigation_strength = static_cast<float>(impl->selection->photosensitivity_mitigation_strength) / 255.0F;
         next.sequence = impl->selection->sequence;
         const auto name_end = std::find(std::begin(impl->selection->selected_shader_name), std::end(impl->selection->selected_shader_name), '\0');
         next.selected_shader_name.assign(std::begin(impl->selection->selected_shader_name), name_end);

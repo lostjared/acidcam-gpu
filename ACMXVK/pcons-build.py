@@ -356,6 +356,12 @@ compile_shader(
     shader_output_dir / "compute_test_hdr.comp.spv",
     "-DACMXVK_HDR_COMPUTE=1",
 )
+compile_shader(
+    "shader-photosensitivity-mitigation-hdr",
+    project_dir / "shaders" / "photosensitivity_mitigation.comp",
+    shader_output_dir / "photosensitivity_mitigation_hdr.comp.spv",
+    "-DACMXVK_HDR_COMPUTE=1",
+)
 for shader in sorted((project_dir / "shaders" / "xfade").glob("xfade_*.glsl")):
     compile_shader(
         f"shader-xfade-{shader.stem}",
@@ -401,6 +407,10 @@ build_defines = {
     "ACMXVK_INSTALL_FLIP_SHADER": install_resource_dir / "shaders" / "flip.frag.spv",
     "ACMXVK_BUILD_PASSTHROUGH_SHADER": shader_output_dir / "passthrough.frag.spv",
     "ACMXVK_INSTALL_PASSTHROUGH_SHADER": install_resource_dir / "shaders" / "passthrough.frag.spv",
+    "ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_SHADER": shader_output_dir / "photosensitivity_mitigation.comp.spv",
+    "ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_SHADER": install_resource_dir / "shaders" / "photosensitivity_mitigation.comp.spv",
+    "ACMXVK_BUILD_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER": shader_output_dir / "photosensitivity_mitigation_hdr.comp.spv",
+    "ACMXVK_INSTALL_PHOTOSENSITIVITY_MITIGATION_HDR_SHADER": install_resource_dir / "shaders" / "photosensitivity_mitigation_hdr.comp.spv",
     "ACMXVK_BUILD_STABLE_DIFFUSION_UPSCALE_SHADER": shader_output_dir / "sd_upscale.comp.spv",
     "ACMXVK_INSTALL_STABLE_DIFFUSION_UPSCALE_SHADER": install_resource_dir / "shaders" / "sd_upscale.comp.spv",
     "ACMXVK_BUILD_HDR_TRANSFER_DIRECTORY": shader_output_dir,

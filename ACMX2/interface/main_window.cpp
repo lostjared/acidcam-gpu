@@ -1594,6 +1594,25 @@ void MainWindow::initControls() {
         publishRuntimeSettingsToRunningProcess();
     });
     playbackMenu->addAction(normalizedTimeAction);
+    photosensitivityMitigationAction = playbackMenu->addAction(tr("Photosensitivity Mitigation"));
+    photosensitivityMitigationAction->setCheckable(true);
+    connect(photosensitivityMitigationAction, &QAction::toggled, this, [this](bool enabled) {
+        photosensitivity_mitigation_enabled = enabled;
+        QSettings settings("LostSideDead", "acmx2");
+        settings.setValue("interface/photosensitivity_mitigation_enabled", enabled);
+        publishRuntimeSettingsToRunningProcess();
+    });
+    photosensitivityMitigationStrengthAction = playbackMenu->addAction(tr("Photosensitivity Mitigation Strength..."));
+    connect(photosensitivityMitigationStrengthAction, &QAction::triggered, this, [this]() {
+        bool accepted = false;
+        const double strength = QInputDialog::getDouble(this, tr("Photosensitivity Mitigation Strength"), tr("Strength:"), photosensitivity_mitigation_strength, 0.0, 1.0, 2, &accepted);
+        if (accepted) {
+            photosensitivity_mitigation_strength = strength;
+            QSettings settings("LostSideDead", "acmx2");
+            settings.setValue("interface/photosensitivity_mitigation_strength", strength);
+            publishRuntimeSettingsToRunningProcess();
+        }
+    });
     play_stop = new QAction(tr("Stop"), this);
     play_stop->setShortcut(QKeySequence("Shift+F5"));
     play_stop->setEnabled(false);
@@ -2807,7 +2826,9 @@ void MainWindow::initShaderSelectionSharedMemory() {
         shaderSelectionShm->display_filter_enabled = 0;
         shaderSelectionShm->watermark_enabled = 0;
         shaderSelectionShm->normalized_time_enabled = 0;
-        std::fill(std::begin(shaderSelectionShm->reserved_flags), std::end(shaderSelectionShm->reserved_flags), 0);
+        shaderSelectionShm->photosensitivity_mitigation_enabled = 0;
+        shaderSelectionShm->photosensitivity_mitigation_strength = 115;
+        shaderSelectionShm->reserved_flag = 0;
         std::fill(std::begin(shaderSelectionShm->shader_pass_indices), std::end(shaderSelectionShm->shader_pass_indices), -1);
         std::fill(&shaderSelectionShm->shader_pass_names[0][0], &shaderSelectionShm->shader_pass_names[0][0] + acmx2::ipc::kShaderSelectionMaxPassCount * acmx2::ipc::kShaderSelectionMaxShaderName, '\0');
         shaderSelectionShm->gpu_filter_count = 0;
@@ -3669,6 +3690,8 @@ void MainWindow::publishRuntimeSettingsToRunningProcess() {
     }
     shaderSelectionShm->display_filter_enabled = display_filter_enabled ? 1 : 0;
     shaderSelectionShm->normalized_time_enabled = normalized_time ? 1 : 0;
+    shaderSelectionShm->photosensitivity_mitigation_enabled = active_backend == acmx2::Backend::Acmxvk && photosensitivity_mitigation_enabled ? 1 : 0;
+    shaderSelectionShm->photosensitivity_mitigation_strength = static_cast<uint8_t>(std::clamp(std::lround(photosensitivity_mitigation_strength * 255.0), 0L, 255L));
 
     const bool watermarkActive = watermark_enabled && !watermark_text.isEmpty();
     shaderSelectionShm->watermark_enabled = watermarkActive ? 1 : 0;
@@ -4117,6 +4140,10 @@ void MainWindow::update_backend_ui() {
         projectMenu->setEnabled(active_backend == acmx2::Backend::Acmxvk);
     if (effectPacksAction)
         effectPacksAction->setVisible(active_backend == acmx2::Backend::Acmxvk);
+    if (photosensitivityMitigationAction)
+        photosensitivityMitigationAction->setVisible(active_backend == acmx2::Backend::Acmxvk);
+    if (photosensitivityMitigationStrengthAction)
+        photosensitivityMitigationStrengthAction->setVisible(active_backend == acmx2::Backend::Acmxvk);
 
     const bool launchAvailable = backend_launch_available();
     const bool acmx2Tools = active_backend == acmx2::Backend::Acmx2;
@@ -4937,6 +4964,12 @@ bool MainWindow::applyProjectDocument(const QString &path, const QJsonDocument &
     watermark_g = applicationSettings.value("watermarkG", 0).toInt();
     watermark_b = applicationSettings.value("watermarkB", 150).toInt();
     display_filter_enabled = applicationSettings.value("displayFilter", false).toBool();
+    photosensitivity_mitigation_enabled = interfaceSettings.value("interface/photosensitivity_mitigation_enabled", false).toBool();
+    photosensitivity_mitigation_strength = std::clamp(interfaceSettings.value("interface/photosensitivity_mitigation_strength", 0.45).toDouble(), 0.0, 1.0);
+    if (photosensitivityMitigationAction) {
+        QSignalBlocker blocker(photosensitivityMitigationAction);
+        photosensitivityMitigationAction->setChecked(photosensitivity_mitigation_enabled);
+    }
     if (displayFilterAction) {
         QSignalBlocker blocker(displayFilterAction);
         displayFilterAction->setChecked(display_filter_enabled);
@@ -6758,6 +6791,11 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
 
     if (display_filter_enabled) {
         arguments << "--display-filter";
+    }
+
+    if (active_backend == acmx2::Backend::Acmxvk && photosensitivity_mitigation_enabled) {
+        arguments << "--photosensitivity-mitigation";
+        arguments << "--photosensitivity-mitigation-strength" << QString::number(photosensitivity_mitigation_strength, 'f', 2);
     }
 
     if (include_extra_arguments) {

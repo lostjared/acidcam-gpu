@@ -54,7 +54,9 @@ namespace acmxvk::ipc {
         std::uint8_t display_filter_enabled = 0;
         std::uint8_t watermark_enabled = 0;
         std::uint8_t normalized_time_enabled = 0;
-        std::uint8_t reserved_flags[3] = {0, 0, 0};
+        std::uint8_t photosensitivity_mitigation_enabled = 0;
+        std::uint8_t photosensitivity_mitigation_strength = 115;
+        std::uint8_t reserved_flag = 0;
         std::int32_t shader_pass_indices[MAX_PASS_COUNT] = {};
         char shader_pass_names[MAX_PASS_COUNT][MAX_SHADER_NAME] = {};
         std::uint32_t gpu_filter_count = 0;
