@@ -65,6 +65,7 @@ class SettingsWindow : public QDialog {
     bool isSavingToOutputVideoFile() const;
     /// @return True when the video render log should be saved beside its output file.
     bool isSavingOutputLog() const;
+    bool isPhotosensitivityWarningEnabled() const;
     /// @return True if HDR was detected in the currently selected input video.
     bool isInputHdrDetected() const;
     /// @return True if the user enabled the post-process HDR10 conversion.
@@ -220,6 +221,7 @@ class SettingsWindow : public QDialog {
     QRadioButton *graphicsFileOptionRadioButton;
     QCheckBox *saveOutputVideoCheckBox;
     QCheckBox *saveOutputLogCheckBox = nullptr;
+    QCheckBox *photosensitivityWarningCheckBox = nullptr;
     QCheckBox *textureCacheCheckBox;
     QSpinBox *cacheDelaySpinBox;
     QSpinBox *cacheSizeSpinBox;

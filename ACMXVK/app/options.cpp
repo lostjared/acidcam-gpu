@@ -1273,6 +1273,10 @@ namespace acmxvk {
                 option_handled = true;
                 options.copy_audio = true;
             }
+            if (option == "--photosensitivity-warning") {
+                option_handled = true;
+                options.photosensitivity_warning = true;
+            }
             if (option == "--mute-output") {
                 option_handled = true;
                 options.mute_output = true;
@@ -1488,6 +1492,9 @@ namespace acmxvk {
         }
         if (options.png_output && !options.output_file.empty()) {
             throw std::runtime_error("--png <directory> cannot be combined with --output <file>");
+        }
+        if (options.photosensitivity_warning && (options.output_file.empty() || options.png_output)) {
+            throw std::runtime_error("--photosensitivity-warning requires encoded video output");
         }
         if (options.max_size_mb > 0.0 && (options.output_file.empty() || options.png_output)) {
             throw std::runtime_error("--max-size requires encoded video output");
@@ -1728,6 +1735,7 @@ namespace acmxvk {
                << "      --history-test          Enable history and the built-in echo demo\n\n"
                << "Recording:\n"
                << "  -o, --output <file>         Encode processed output with MXWrite\n"
+               << "      --photosensitivity-warning  Prepend a four-second flashing-content warning\n"
                << "      --duration <seconds>    Stop after this much encoded video or PNG output\n"
                << "      --max-size <MB>         Stop when encoded output exceeds this size\n"
                << "      --png <directory>       Write video frames as a PNG sequence in directory\n"

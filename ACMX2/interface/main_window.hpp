@@ -270,6 +270,7 @@ class MainWindow : public QMainWindow {
     bool show_shader_library_load_progress = false;
     QPointer<QProgressDialog> shader_library_progress_dialog;
     bool save_output_log = false;
+    bool photosensitivity_warning = false;
     QFile output_run_log;
     double output_fps = 24.0f;
     QString encode_preset = "medium";

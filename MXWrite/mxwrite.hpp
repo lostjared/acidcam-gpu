@@ -345,7 +345,7 @@ class Writer {
  * @param sourceAudioFile Input media file containing the audio stream.
  * @param destVideoFile Output video file to receive the audio stream.
  */
-extern void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideoFile);
+extern void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideoFile, double audio_delay_seconds = 0.0);
 /**
  * @brief Free FFmpeg format contexts used during transfer operations.
  * @param source_ctx Source format context.

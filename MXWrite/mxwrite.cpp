@@ -218,7 +218,7 @@ void cleanup_contexts(AVFormatContext *source_ctx, AVFormatContext *dest_ctx, AV
     }
 }
 
-void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideoFile) {
+void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideoFile, double audio_delay_seconds) {
     std::lock_guard<std::mutex> lock(transfer_audio_mutex);
     if (!is_format_supported(destVideoFile.data())) {
         std::cerr << "Unsupported output format. Supported formats: .mp4, .mkv, .avi, .mov\n";
@@ -364,14 +364,15 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
         av_packet_unref(&packet);
     }
 
+    const int64_t audio_delay_ts = av_rescale_q(static_cast<int64_t>(std::llround(audio_delay_seconds * AV_TIME_BASE)), AVRational{1, AV_TIME_BASE}, source_ctx->streams[source_audio_idx]->time_base);
     int64_t video_duration_ts = 0;
     {
         AVStream *vid_stream = dest_ctx->streams[0];
         if (vid_stream->duration > 0) {
-            video_duration_ts = av_rescale_q(vid_stream->duration, vid_stream->time_base, source_ctx->streams[source_audio_idx]->time_base);
+            video_duration_ts = av_rescale_q(vid_stream->duration, vid_stream->time_base, source_ctx->streams[source_audio_idx]->time_base) - audio_delay_ts;
         } else if (dest_ctx->duration > 0) {
             AVRational av_tb = {1, AV_TIME_BASE};
-            video_duration_ts = av_rescale_q(dest_ctx->duration, av_tb, source_ctx->streams[source_audio_idx]->time_base);
+            video_duration_ts = av_rescale_q(dest_ctx->duration, av_tb, source_ctx->streams[source_audio_idx]->time_base) - audio_delay_ts;
         }
     }
 
@@ -385,6 +386,10 @@ void transfer_audio(std::string_view sourceAudioFile, std::string_view destVideo
             AVStream *in_stream = source_ctx->streams[packet.stream_index];
             AVStream *out_stream = output_ctx->streams[dest_audio_idx];
             av_packet_rescale_ts(&packet, in_stream->time_base, out_stream->time_base);
+            if (packet.pts != AV_NOPTS_VALUE)
+                packet.pts += audio_delay_ts;
+            if (packet.dts != AV_NOPTS_VALUE)
+                packet.dts += audio_delay_ts;
             packet.stream_index = dest_audio_idx;
 
             if (av_interleaved_write_frame(output_ctx, &packet) < 0) {

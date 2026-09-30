@@ -353,7 +353,7 @@ namespace acmxvk {
             fail("root", "contains invalid JSON: " + errors);
         }
         require_object(root, "root");
-        reject_unknown_fields(root, "root", {"format", "version", "id", "name", "description", "icon", "passes", "requires", "controls", "audio_mappings", "midi_mappings", "deep_dream"});
+        reject_unknown_fields(root, "root", {"format", "version", "id", "name", "description", "intense_flashing", "icon", "passes", "requires", "controls", "audio_mappings", "midi_mappings", "deep_dream"});
 
         const std::string format = read_string(required(root, "format", "root"), input::StringKind::Token, "format");
         if (format != FORMAT_NAME) {
@@ -366,6 +366,9 @@ namespace acmxvk {
         pack.name = read_string(required(root, "name", "root"), input::StringKind::DisplayText, "name");
         if (root.isMember("description")) {
             pack.description = read_string(root["description"], input::StringKind::DisplayText, "description", true);
+        }
+        if (root.isMember("intense_flashing")) {
+            pack.intense_flashing = read_bool(root["intense_flashing"], "intense_flashing");
         }
         pack.manifest = fs::absolute(manifest_path).lexically_normal();
         pack.root = pack.manifest.parent_path();

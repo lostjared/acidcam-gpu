@@ -71,6 +71,7 @@ namespace acmxvk {
         std::string id;
         std::string name;
         std::string description;
+        bool intense_flashing = false;
         std::filesystem::path root;
         std::filesystem::path manifest;
         std::optional<std::filesystem::path> icon;

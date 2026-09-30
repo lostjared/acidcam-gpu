@@ -106,6 +106,7 @@ namespace acmxvk {
             SnapshotFormat snapshot_format = SnapshotFormat::Png;
             bool continuous = false;
             bool frame_due = false;
+            bool warning_card = false;
             bool has_pts = false;
             std::uint64_t pts = 0;
         };
@@ -195,6 +196,10 @@ namespace acmxvk {
         bool media_clock_sync_logged = false;
         bool camera_recording_clock_logged = false;
         bool recording_complete = false;
+        bool warning_card_pending = false;
+        bool warning_card_queued = false;
+        std::vector<SDL_Rect> warning_text_bounds;
+        std::uint64_t warning_frame_count = 0;
         bool headless_shutdown_logged = false;
         bool headless_progress_complete = false;
         bool input_paused = false;

@@ -25,8 +25,8 @@ namespace acmxvk::audio {
         void stop_output();
         [[nodiscard]] bool has_output_clock() const;
         [[nodiscard]] double playback_time() const;
-        bool mux_into_video(const std::string &video_path, double video_duration);
-        static bool mux_recording_into_video(std::vector<float> samples, unsigned int sample_rate, const std::string &video_path, double video_duration);
+        bool mux_into_video(const std::string &video_path, double video_duration, double audio_delay_seconds = 0.0);
+        static bool mux_recording_into_video(std::vector<float> samples, unsigned int sample_rate, const std::string &video_path, double video_duration, double audio_delay_seconds = 0.0);
         [[nodiscard]] bool is_open() const;
         [[nodiscard]] bool is_active() const;
         [[nodiscard]] double duration_seconds() const;

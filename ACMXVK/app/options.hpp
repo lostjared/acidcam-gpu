@@ -101,6 +101,7 @@ namespace acmxvk {
         bool constant_frame_rate = false;
         bool fill_pts_gaps = false;
         bool copy_audio = false;
+        bool photosensitivity_warning = false;
         bool mute_output = false;
         bool enable_audio = false;
         bool enable_audio_time = false;

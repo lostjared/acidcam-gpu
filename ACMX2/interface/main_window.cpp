@@ -1950,6 +1950,7 @@ void MainWindow::loadSessionSettings() {
 
     const bool saveOutput = settings.value("interface/save_output", false).toBool();
     output_file = saveOutput ? settings.value("interface/output_video", "").toString() : QString();
+    photosensitivity_warning = settings.value("interface/photosensitivity_warning", false).toBool();
     save_output_log = saveOutput && settings.value("interface/save_output_log", false).toBool();
     full_screen_value = settings.value("interface/fullscreen", false).toBool();
     enable_vsync = settings.value("interface/acmxvk_vsync", false).toBool();
@@ -6030,6 +6031,7 @@ void MainWindow::cameraSettings() {
             use_yuv = settingsWindow.isUseYuvEnabled();
         }
         if (settingsWindow.isSavingToOutputVideoFile()) {
+            photosensitivity_warning = settingsWindow.isPhotosensitivityWarningEnabled();
             output_file = settingsWindow.getOutputVideoFile();
             if (!project_output_directory.isEmpty()) {
                 QString output_filename = QFileInfo(output_file).fileName();
@@ -6050,6 +6052,7 @@ void MainWindow::cameraSettings() {
         } else {
             output_file = "";
             save_output_log = false;
+            photosensitivity_warning = false;
         }
         // Only meaningful in input-video mode + with an output file. The
         // settings dialog already gates this on HDR detection, but we re-check
@@ -6240,6 +6243,8 @@ void MainWindow::runSelected() {
     if (!output_file.isEmpty()) {
         const QString launch_output_file = active_backend == acmx2::Backend::Acmxvk ? timestamped_output_path(output_file) : output_file;
         arguments << "--output" << launch_output_file;
+        if (active_backend == acmx2::Backend::Acmxvk && photosensitivity_warning)
+            arguments << "--photosensitivity-warning";
         if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
         else
@@ -6545,6 +6550,8 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
     if (!configured_output_file.isEmpty()) {
         const QString launch_output_file = output_override.isEmpty() && active_backend == acmx2::Backend::Acmxvk ? timestamped_output_path(configured_output_file) : configured_output_file;
         arguments << "--output" << launch_output_file;
+        if (active_backend == acmx2::Backend::Acmxvk && photosensitivity_warning)
+            arguments << "--photosensitivity-warning";
         if (active_backend == acmx2::Backend::Acmxvk && encode_rate_control == "bitrate")
             arguments << "--video-bitrate" << encode_bitrate;
         else

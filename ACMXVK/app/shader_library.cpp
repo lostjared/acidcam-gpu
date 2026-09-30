@@ -64,6 +64,13 @@ namespace acmxvk {
                 if (!storage.isOpened()) {
                     throw std::runtime_error("unable to open shader manifest: " + json_path.string());
                 }
+                const cv::FileNode intense_flashing = storage["intense_flashing"];
+                if (!intense_flashing.empty()) {
+                    if (!intense_flashing.isInt() || (static_cast<int>(intense_flashing) != 0 && static_cast<int>(intense_flashing) != 1)) {
+                        throw std::runtime_error(json_path.string() + " field 'intense_flashing' must be a boolean");
+                    }
+                    manifest.intense_flashing = static_cast<int>(intense_flashing) != 0;
+                }
                 const cv::FileNode shader_entries = storage["shaders"];
                 if (shader_entries.type() == cv::FileNode::NONE || !shader_entries.isSeq()) {
                     throw std::runtime_error(json_path.string() + " must contain a 'shaders' array");
@@ -658,6 +665,9 @@ namespace acmxvk {
             output << "{\n    \"version\": 1"
                    << ",\n    \"backend\": \"acmxvk\""
                    << ",\n    \"library_type\": \"runtime\"";
+            if (manifest.intense_flashing) {
+                output << ",\n    \"intense_flashing\": true";
+            }
             if (!manifest.custom_uniforms.empty()) {
                 output << ",\n    \"custom_uniforms\": {\n";
                 for (std::size_t index = 0; index < manifest.custom_uniforms.size(); ++index) {

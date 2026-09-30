@@ -253,13 +253,13 @@ namespace acmxvk {
         }
 #endif
         if (should_copy_audio) {
-            transfer_audio(options.input_file, options.output_file);
+            transfer_audio(options.input_file, options.output_file, warning_frame_count / recording_fps);
             std::cout << "acmxvk: copied audio track from " << options.input_file << " to " << options.output_file << '\n';
         }
 #ifdef AUDIO_ENABLED
         if (should_mux_file_audio) {
             const double video_duration = writer.get_duration();
-            if (!file_audio_source->mux_into_video(options.output_file, video_duration)) {
+            if (!file_audio_source->mux_into_video(options.output_file, video_duration, warning_frame_count / recording_fps)) {
                 std::cerr << "acmxvk: file-audio mux failed; preserving the "
                              "encoded video without audio\n";
             }
@@ -279,7 +279,7 @@ namespace acmxvk {
             if (live_audio_recording.empty()) {
                 std::cerr << "acmxvk: live audio recording was empty; preserving "
                              "the encoded video without audio\n";
-            } else if (!audio::FileAudioSource::mux_recording_into_video(std::move(live_audio_recording.samples), live_audio_recording.sample_rate, options.output_file, video_duration)) {
+            } else if (!audio::FileAudioSource::mux_recording_into_video(std::move(live_audio_recording.samples), live_audio_recording.sample_rate, options.output_file, video_duration, warning_frame_count / recording_fps)) {
                 std::cerr << "acmxvk: live-audio mux failed; preserving the "
                              "encoded video without audio\n";
             }
@@ -554,6 +554,9 @@ namespace acmxvk {
     }
 
     void MainWindow::onRecordCustomRendering(VkCommandBuffer command_buffer, std::uint32_t image_index) {
+        if (warning_card_pending) {
+            return;
+        }
         if (model_texture_prepass_active) {
             return;
         }
@@ -561,6 +564,9 @@ namespace acmxvk {
     }
 
     void MainWindow::onRecordPostProcessingTexture(VkCommandBuffer command_buffer, std::uint32_t image_index, VkImageView texture_view, [[maybe_unused]] VkExtent2D texture_extent) {
+        if (warning_card_pending) {
+            return;
+        }
         if (!model_texture_prepass_active) {
             return;
         }
@@ -734,6 +740,106 @@ namespace acmxvk {
         }
 
         if (!pollStableDiffusionInitialization()) {
+            return;
+        }
+
+        if (warning_card_queued) {
+            setFrameReadbackEnabled(false);
+            return;
+        }
+
+        if (warning_card_pending) {
+            const VkExtent2D extent = getRenderExtent();
+            const int card_width = extent.width > 0U ? static_cast<int>(extent.width) : recording_width;
+            const int card_height = extent.height > 0U ? static_cast<int>(extent.height) : recording_height;
+            const fs::path card_font_path = overlay_font_path(options);
+            constexpr std::array<std::string_view, 2> PARAGRAPHS{"PHOTOSENSITIVITY WARNING", "This video may contain intense flashing lights and rapidly changing images."};
+            const int margin = std::max(2, card_width / 16);
+            const int max_text_width = card_width - 2 * margin;
+            const int max_text_height = card_height - 2 * std::max(2, card_height / 12);
+            TTF_Font *font = nullptr;
+            std::vector<std::string> lines;
+            int line_spacing = 0;
+            for (int size = std::max(8, std::min({64, card_width / 18, card_height / 10})); size >= 4; --size) {
+                font = TTF_OpenFont(card_font_path.string().c_str(), static_cast<float>(size));
+                if (font == nullptr) {
+                    throw std::runtime_error("unable to open photosensitivity warning font: " + card_font_path.string());
+                }
+                lines.clear();
+                const auto fits = [&](const std::string &text) {
+                    int text_width = 0;
+                    int text_height = 0;
+                    if (!TTF_GetStringSize(font, text.c_str(), text.size(), &text_width, &text_height)) {
+                        throw std::runtime_error("unable to measure photosensitivity warning text");
+                    }
+                    return text_width <= max_text_width;
+                };
+                bool text_fits = true;
+                for (const std::string_view paragraph : PARAGRAPHS) {
+                    std::istringstream words{std::string(paragraph)};
+                    std::string line;
+                    std::string word;
+                    while (words >> word) {
+                        const std::string candidate = line.empty() ? word : line + " " + word;
+                        if (fits(candidate)) {
+                            line = candidate;
+                            continue;
+                        }
+                        if (!line.empty()) {
+                            lines.push_back(line);
+                            line.clear();
+                        }
+                        while (!fits(word)) {
+                            if (!fits(word.substr(0, 1))) {
+                                text_fits = false;
+                                break;
+                            }
+                            std::size_t count = 1;
+                            while (count < word.size() && fits(word.substr(0, count + 1))) {
+                                ++count;
+                            }
+                            lines.push_back(word.substr(0, count));
+                            word.erase(0, count);
+                        }
+                        if (!text_fits) {
+                            break;
+                        }
+                        line = word;
+                    }
+                    if (!text_fits) {
+                        break;
+                    }
+                    if (!line.empty()) {
+                        lines.push_back(line);
+                    }
+                }
+                line_spacing = TTF_GetFontHeight(font) + std::max(2, size / 3);
+                if (text_fits && !lines.empty() && static_cast<int>(lines.size()) * line_spacing <= max_text_height) {
+                    break;
+                }
+                TTF_CloseFont(font);
+                font = nullptr;
+            }
+            if (font == nullptr) {
+                throw std::runtime_error("export resolution is too small for the photosensitivity warning");
+            }
+            const SDL_Color color{255U, 255U, 255U, 255U};
+            warning_text_bounds.clear();
+            int y = (card_height - static_cast<int>(lines.size()) * line_spacing) / 2;
+            for (const std::string &line : lines) {
+                int text_width = 0;
+                int text_height = 0;
+                if (!TTF_GetStringSize(font, line.c_str(), line.size(), &text_width, &text_height)) {
+                    TTF_CloseFont(font);
+                    throw std::runtime_error("unable to measure photosensitivity warning text");
+                }
+                const int x = (card_width - text_width) / 2;
+                warning_text_bounds.push_back(SDL_Rect{x, y, text_width, text_height});
+                printText(line, x, y, color, font);
+                y += line_spacing;
+            }
+            TTF_CloseFont(font);
+            setFrameReadbackEnabled(true);
             return;
         }
 
@@ -1837,6 +1943,9 @@ namespace acmxvk {
         shader_library_directory = fs::absolute(options.shader_directory).lexically_normal();
         const ShaderManifest manifest = loadShaderManifest(shader_library_directory);
         shader_manifest_path = manifest.path;
+        if (manifest.intense_flashing) {
+            std::cout << "acmxvk: shader library marks potentially intense flashing content\n";
+        }
         custom_uniforms = manifest.custom_uniforms;
         applyCustomUniformOverrides();
         for (const std::string &entry : manifest.entries) {
@@ -2940,7 +3049,7 @@ namespace acmxvk {
     }
 
     void MainWindow::initializeOverlayFont() {
-        if (counter_disabled && !options.display_filter && options.watermark_text.empty() && !options.interface_shm) {
+        if (counter_disabled && !options.display_filter && options.watermark_text.empty() && !options.interface_shm && !options.photosensitivity_warning) {
             return;
         }
 
@@ -4082,6 +4191,10 @@ namespace acmxvk {
                 throw std::runtime_error("unable to open output video: " + options.output_file);
             }
             writer.set_block_when_full(options.no_drop || options.fill_pts_gaps);
+            if (options.photosensitivity_warning) {
+                warning_card_pending = true;
+                warning_frame_count = std::max<std::uint64_t>(1U, static_cast<std::uint64_t>(std::llround(recording_fps * 4.0)));
+            }
             std::cout << "acmxvk: recording " << recording_width << 'x' << recording_height << " at " << recording_fps << " FPS to " << options.output_file << (options.no_drop ? " (no-drop)\n" : "\n");
             if (options.constant_frame_rate) {
                 std::cout << "acmxvk: constant-frame-rate encoding active; rendered "
@@ -4106,6 +4219,10 @@ namespace acmxvk {
         request.snapshot_format = pending_snapshot_format;
         request.continuous = continuousReadbackEnabled();
         request.frame_due = recording_frame_due;
+        request.warning_card = warning_card_pending;
+        if (request.warning_card) {
+            warning_card_queued = true;
+        }
         request.has_pts = recording_frame_has_pts && !options.constant_frame_rate;
         request.pts = recording_frame_pts;
         readback_requests.push_back(request);
@@ -4127,6 +4244,52 @@ namespace acmxvk {
         }
         const ReadbackRequest request = readback_requests.front();
         readback_requests.pop_front();
+
+        if (request.warning_card) {
+            cv::Mat card(static_cast<int>(height), static_cast<int>(width), CV_8UC4, cv::Scalar(0, 0, 0, 255));
+            for (const SDL_Rect &bounds : warning_text_bounds) {
+                const int left = std::clamp(bounds.x, 0, static_cast<int>(width));
+                const int top = std::clamp(bounds.y, 0, static_cast<int>(height));
+                const int right = std::clamp(bounds.x + bounds.w, 0, static_cast<int>(width));
+                const int bottom = std::clamp(bounds.y + bounds.h, 0, static_cast<int>(height));
+                for (int row = top; row < bottom; ++row) {
+                    const std::uint8_t *source = rgba.data() + static_cast<std::size_t>(row) * width * 4U;
+                    std::uint8_t *target = card.ptr<std::uint8_t>(row);
+                    for (int column = left; column < right; ++column) {
+                        const std::size_t offset = static_cast<std::size_t>(column) * 4U;
+                        const std::uint8_t shade = std::min({source[offset], source[offset + 1U], source[offset + 2U]});
+                        target[offset] = shade;
+                        target[offset + 1U] = shade;
+                        target[offset + 2U] = shade;
+                    }
+                }
+            }
+            cv::Mat resized_card;
+            if (static_cast<int>(width) != recording_width || static_cast<int>(height) != recording_height) {
+                cv::resize(card, resized_card, cv::Size(recording_width, recording_height));
+            }
+            std::uint8_t *pixels = resized_card.empty() ? card.ptr<std::uint8_t>() : resized_card.ptr<std::uint8_t>();
+            std::vector<std::uint16_t> hdr_card;
+            if (hdr_output_enabled) {
+                const std::size_t samples = static_cast<std::size_t>(recording_width) * static_cast<std::size_t>(recording_height) * 4U;
+                hdr_card.resize(samples);
+                for (std::size_t sample = 0; sample < samples; ++sample) {
+                    hdr_card[sample] = static_cast<std::uint16_t>(pixels[sample]) * 257U;
+                }
+            }
+            for (std::uint64_t frame = 0; frame < warning_frame_count; ++frame) {
+                if (hdr_output_enabled) {
+                    writer.write_hdr_rgba16(hdr_card.data());
+                } else {
+                    writer.write(pixels);
+                }
+            }
+            gap_fill_next_pts = warning_frame_count;
+            warning_card_pending = false;
+            warning_card_queued = false;
+            setFrameReadbackEnabled(false);
+            return;
+        }
 
         if (request.snapshot) {
             const fs::path path = snapshot_path(options.snapshot_directory, width, height, snapshot_count, request.snapshot_format);
@@ -4194,8 +4357,9 @@ namespace acmxvk {
                 }
             };
 
-            if (options.fill_pts_gaps && request.has_pts && request.pts >= gap_fill_next_pts) {
-                while (gap_fill_next_pts < request.pts) {
+            const std::uint64_t output_pts = request.pts + warning_frame_count;
+            if (options.fill_pts_gaps && request.has_pts && output_pts >= gap_fill_next_pts) {
+                while (gap_fill_next_pts < output_pts) {
                     if (gap_fill_previous_valid) {
                         write_sequential_frame(gap_fill_previous_rgba.data(), hdr_output_enabled ? gap_fill_previous_rgba16.data() : nullptr);
                     } else {
@@ -4205,7 +4369,7 @@ namespace acmxvk {
                     ++gap_fill_duplicate_count;
                 }
                 write_sequential_frame(output_pixels, hdr_output_pixels);
-                gap_fill_next_pts = request.pts + 1;
+                gap_fill_next_pts = output_pts + 1;
 
                 const std::size_t pixel_count = static_cast<std::size_t>(recording_width) * static_cast<std::size_t>(recording_height) * 4U;
                 if (hdr_output_enabled) {
@@ -4219,12 +4383,12 @@ namespace acmxvk {
             } else if (!options.fill_pts_gaps) {
                 if (hdr_output_enabled) {
                     if (request.has_pts) {
-                        writer.write_hdr_rgba16_at_pts(const_cast<std::uint16_t *>(hdr_output_pixels), static_cast<std::int64_t>(request.pts));
+                        writer.write_hdr_rgba16_at_pts(const_cast<std::uint16_t *>(hdr_output_pixels), static_cast<std::int64_t>(output_pts));
                     } else {
                         writer.write_hdr_rgba16(const_cast<std::uint16_t *>(hdr_output_pixels));
                     }
                 } else if (request.has_pts) {
-                    writer.write_at_pts(output_pixels, static_cast<std::int64_t>(request.pts));
+                    writer.write_at_pts(output_pixels, static_cast<std::int64_t>(output_pts));
                 } else {
                     writer.write(output_pixels);
                 }
@@ -4250,7 +4414,7 @@ namespace acmxvk {
             if (request.has_pts) {
                 output_duration = static_cast<double>(request.pts + 1) / recording_fps;
             } else if (writer.is_open()) {
-                output_duration = writer.get_duration();
+                output_duration = writer.get_duration() - (options.photosensitivity_warning ? 4.0 : 0.0);
             } else {
                 output_duration = static_cast<double>(output_frame_count) / recording_fps;
             }

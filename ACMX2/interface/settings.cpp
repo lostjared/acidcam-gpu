@@ -813,6 +813,10 @@ void SettingsWindow::init() {
     saveOutputVideoCheckBox = new QCheckBox("Save Output to Video File", this);
     saveOutputLogCheckBox = new QCheckBox("Save Log when writing file", this);
     saveOutputLogCheckBox->setToolTip("Save this render's launcher and engine output as filename.mp4.log beside the video.");
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        photosensitivityWarningCheckBox = new QCheckBox("Prepend 4-second photosensitivity warning", this);
+        photosensitivityWarningCheckBox->setToolTip("Add a black warning card before exported video with potentially intense flashing content.");
+    }
     outputVideoFileLineEdit = new QLineEdit(this);
     outputVideoFileLineEdit->setReadOnly(true);
     browseOutputVideoButton = new QPushButton("Browse", this);
@@ -1078,6 +1082,8 @@ void SettingsWindow::init() {
     outputRow->addWidget(browseOutputVideoButton);
     outputGrid->addLayout(outputRow, r, 1);
     outputGrid->addWidget(copyAudioCheckBox, ++r, 0, 1, 2);
+    if (photosensitivityWarningCheckBox)
+        outputGrid->addWidget(photosensitivityWarningCheckBox, ++r, 0, 1, 2);
     outputGrid->addWidget(writePngCheckBox, ++r, 0, 1, 2);
     auto *pngDirectoryLabel = new QLabel("PNG Directory:", this);
     pngDirectoryLabel->setVisible(activeBackend == acmx2::Backend::Acmxvk);
@@ -1384,6 +1390,8 @@ void SettingsWindow::init() {
     });
 
     connect(saveOutputVideoCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        if (photosensitivityWarningCheckBox)
+            photosensitivityWarningCheckBox->setEnabled(checked);
         outputVideoFileLineEdit->setEnabled(checked);
         browseOutputVideoButton->setEnabled(checked);
         saveOutputLogCheckBox->setEnabled(checked);
@@ -1581,6 +1589,10 @@ void SettingsWindow::loadUiState() {
     const bool save_output = appSettings.value("interface/save_output", false).toBool();
     saveOutputVideoCheckBox->setChecked(save_output);
     saveOutputLogCheckBox->setChecked(save_output && appSettings.value("interface/save_output_log", false).toBool());
+    if (photosensitivityWarningCheckBox)
+        photosensitivityWarningCheckBox->setChecked(appSettings.value("interface/photosensitivity_warning", false).toBool());
+    if (photosensitivityWarningCheckBox)
+        photosensitivityWarningCheckBox->setEnabled(saveOutputVideoCheckBox->isChecked());
     outputVideoFileLineEdit->setText(appSettings.value("interface/output_video", "").toString());
     copyAudioCheckBox->setChecked(appSettings.value("interface/copy_audio", false).toBool());
     writePngCheckBox->setChecked(activeBackend == acmx2::Backend::Acmxvk && appSettings.value("interface/write_png", false).toBool());
@@ -1686,6 +1698,8 @@ void SettingsWindow::saveUiState() {
 
     appSettings.setValue("interface/save_output", saveOutputVideoCheckBox->isChecked());
     appSettings.setValue("interface/save_output_log", saveOutputLogCheckBox->isChecked());
+    if (photosensitivityWarningCheckBox)
+        appSettings.setValue("interface/photosensitivity_warning", photosensitivityWarningCheckBox->isChecked());
     appSettings.setValue("interface/output_video", outputVideoFileLineEdit->text());
     appSettings.setValue("interface/copy_audio", copyAudioCheckBox->isChecked());
     appSettings.setValue("interface/write_png", writePngCheckBox->isChecked());
@@ -1757,6 +1771,8 @@ bool SettingsWindow::isUsingGraphicsFile() const { return useGraphicsFile; }
 bool SettingsWindow::isSavingToOutputVideoFile() const { return saveOutputVideoFile; }
 
 bool SettingsWindow::isSavingOutputLog() const { return saveOutputLog; }
+
+bool SettingsWindow::isPhotosensitivityWarningEnabled() const { return photosensitivityWarningCheckBox && photosensitivityWarningCheckBox->isChecked(); }
 
 bool SettingsWindow::isInputHdrDetected() const { return inputHdrDetected; }
 

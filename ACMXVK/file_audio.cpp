@@ -628,7 +628,7 @@ namespace acmxvk::audio {
             return static_cast<double>(output->total_position()) / static_cast<double>(FILE_SAMPLE_RATE);
         }
 
-        bool mux_into_video(const std::string &requested_video_path, double video_duration) {
+        bool mux_into_video(const std::string &requested_video_path, double video_duration, double audio_delay_seconds) {
             output.reset();
             if (samples.empty() || !std::isfinite(video_duration) || video_duration <= 0.0) {
                 std::cerr << "acmxvk: cannot mux " << (live_recording_source ? "live audio input" : "file audio") << " without samples and a positive video duration\n";
@@ -642,7 +642,8 @@ namespace acmxvk::audio {
             }
 
             const double source_duration = duration_seconds();
-            const double mux_duration = repeat ? video_duration : std::min(video_duration, source_duration);
+            const double content_duration = video_duration - audio_delay_seconds;
+            const double mux_duration = repeat ? content_duration : std::min(content_duration, source_duration);
             const std::int64_t target_sample_count = static_cast<std::int64_t>(std::floor(mux_duration * static_cast<double>(FILE_SAMPLE_RATE)));
             if (target_sample_count <= 0) {
                 std::cerr << "acmxvk: file audio mux duration is empty\n";
@@ -786,7 +787,7 @@ namespace acmxvk::audio {
             }
 
             std::int64_t source_position = 0;
-            std::int64_t encoded_position = 0;
+            std::int64_t encoded_position = static_cast<std::int64_t>(std::llround(audio_delay_seconds * FILE_SAMPLE_RATE));
             std::vector<float> input_samples(static_cast<std::size_t>(audio_frame_capacity));
 
             auto drain_audio_packets = [&]() {
@@ -859,13 +860,13 @@ namespace acmxvk::audio {
                 }
                 const std::int64_t timestamp = input_packet->pts != AV_NOPTS_VALUE ? input_packet->pts : input_packet->dts;
                 const double packet_time = timestamp == AV_NOPTS_VALUE ? 0.0 : static_cast<double>(timestamp) * av_q2d(input_video->time_base);
-                if (timestamp != AV_NOPTS_VALUE && packet_time > mux_duration) {
+                if (timestamp != AV_NOPTS_VALUE && packet_time > mux_duration + audio_delay_seconds) {
                     av_packet_unref(input_packet);
                     video_complete = true;
                     break;
                 }
 
-                const std::int64_t audio_target = std::min<std::int64_t>(target_sample_count, static_cast<std::int64_t>(std::ceil((packet_time + static_cast<double>(audio_frame_capacity) / static_cast<double>(FILE_SAMPLE_RATE)) * static_cast<double>(FILE_SAMPLE_RATE))));
+                const std::int64_t audio_target = std::min<std::int64_t>(target_sample_count, static_cast<std::int64_t>(std::ceil((packet_time - audio_delay_seconds + static_cast<double>(audio_frame_capacity) / static_cast<double>(FILE_SAMPLE_RATE)) * static_cast<double>(FILE_SAMPLE_RATE))));
                 while (source_position < audio_target) {
                     if (!encode_audio_frame()) {
                         return fail("could not encode AAC samples", result);
@@ -1083,9 +1084,9 @@ namespace acmxvk::audio {
 
     double FileAudioSource::playback_time() const { return impl->playback_time(); }
 
-    bool FileAudioSource::mux_into_video(const std::string &video_path, double video_duration) { return impl->mux_into_video(video_path, video_duration); }
+    bool FileAudioSource::mux_into_video(const std::string &video_path, double video_duration, double audio_delay_seconds) { return impl->mux_into_video(video_path, video_duration, audio_delay_seconds); }
 
-    bool FileAudioSource::mux_recording_into_video(std::vector<float> samples, unsigned int sample_rate, const std::string &video_path, double video_duration) {
+    bool FileAudioSource::mux_recording_into_video(std::vector<float> samples, unsigned int sample_rate, const std::string &video_path, double video_duration, double audio_delay_seconds) {
         if (!resampleMonoRecording(samples, sample_rate)) {
             return false;
         }
@@ -1094,7 +1095,7 @@ namespace acmxvk::audio {
         source.impl->samples = std::move(samples);
         source.impl->track_paths.emplace_back("live audio input");
         source.impl->live_recording_source = true;
-        return source.impl->mux_into_video(video_path, video_duration);
+        return source.impl->mux_into_video(video_path, video_duration, audio_delay_seconds);
     }
 
     bool FileAudioSource::is_open() const { return !impl->samples.empty(); }

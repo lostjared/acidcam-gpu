@@ -19,6 +19,7 @@ namespace acmxvk {
         };
 
         fs::path path;
+        bool intense_flashing = false;
         std::vector<std::string> entries;
         std::vector<CustomUniform> custom_uniforms;
     };
