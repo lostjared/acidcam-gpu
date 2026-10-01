@@ -393,6 +393,9 @@ resource_targets = [
 
 acmxvk = project.Program("acmxvk", env, sources=[*sources, *windows_icon_source("acmxvk", env)])
 acmxvk.private.include_dirs.extend([project_dir, project_dir / "app"])
+# Use the header that matches the bundled MXWrite library before the installed
+# MXVK prefix, which may contain an older mxwrite.hpp.
+acmxvk.private.include_dirs.insert(0, mxwrite_dir)
 acmxvk.link(*libraries)
 acmxvk.depends(*resource_targets, *shader_targets)
 
