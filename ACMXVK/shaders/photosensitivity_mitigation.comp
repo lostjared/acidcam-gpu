@@ -1,0 +1,153 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+#ifdef ACMXVK_HDR_COMPUTE
+layout(set = 0, binding = 5, rgba16f) writeonly uniform image2D outputImage;
+#else
+layout(set = 0, binding = 5, rgba8) writeonly uniform image2D outputImage;
+#endif
+layout(set = 0, binding = 0) uniform sampler2D samp;
+layout(set = 0, binding = 6) uniform sampler2D originalFrame;
+
+layout(set = 0, binding = 1, std140) uniform SpriteExtended {
+    vec4 mouse;
+    vec4 u0;
+    vec4 u1;
+    vec4 u2;
+    vec4 u3;
+    vec4 custom_uniforms[16];
+    vec4 audio_bands;
+    vec4 audio_history;
+} ext;
+
+#define strength ext.mouse.w
+
+ivec2 clampPos(ivec2 p, ivec2 size) {
+    return clamp(p, ivec2(0), size - ivec2(1));
+}
+
+vec2 pixelUv(ivec2 p, ivec2 size) {
+    return (vec2(clampPos(p, size)) + 0.5) / vec2(size);
+}
+
+vec3 sampleModified(ivec2 p, ivec2 size) {
+    return textureLod(samp, pixelUv(p, size), 0.0).rgb;
+}
+
+vec3 sampleOriginal(ivec2 p, ivec2 size) {
+    return textureLod(originalFrame, pixelUv(p, size), 0.0).rgb;
+}
+
+float luminance(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+float saturationAmount(vec3 color) {
+    float high = max(color.r, max(color.g, color.b));
+    float low = min(color.r, min(color.g, color.b));
+    return high - low;
+}
+
+vec3 localAverage(ivec2 p, ivec2 size) {
+    vec3 center = sampleModified(p, size);
+    vec3 left = sampleModified(p + ivec2(-1, 0), size);
+    vec3 right = sampleModified(p + ivec2(1, 0), size);
+    vec3 up = sampleModified(p + ivec2(0, -1), size);
+    vec3 down = sampleModified(p + ivec2(0, 1), size);
+    return center * 0.40 + left * 0.15 + right * 0.15 + up * 0.15 + down * 0.15;
+}
+
+float modifiedContrast(ivec2 p, ivec2 size) {
+    float center = luminance(sampleModified(p, size));
+    float left = luminance(sampleModified(p + ivec2(-1, 0), size));
+    float right = luminance(sampleModified(p + ivec2(1, 0), size));
+    float up = luminance(sampleModified(p + ivec2(0, -1), size));
+    float down = luminance(sampleModified(p + ivec2(0, 1), size));
+    float low = min(center, min(min(left, right), min(up, down)));
+    float high = max(center, max(max(left, right), max(up, down)));
+    return high - low;
+}
+
+float originalContrast(ivec2 p, ivec2 size) {
+    float center = luminance(sampleOriginal(p, size));
+    float left = luminance(sampleOriginal(p + ivec2(-1, 0), size));
+    float right = luminance(sampleOriginal(p + ivec2(1, 0), size));
+    float up = luminance(sampleOriginal(p + ivec2(0, -1), size));
+    float down = luminance(sampleOriginal(p + ivec2(0, 1), size));
+    float low = min(center, min(min(left, right), min(up, down)));
+    float high = max(center, max(max(left, right), max(up, down)));
+    return high - low;
+}
+
+vec3 reduceAddedPatternContrast(vec3 color, ivec2 p, ivec2 size, float amount) {
+    float current_contrast = modifiedContrast(p, size);
+    float source_contrast = originalContrast(p, size);
+    float added_contrast = max(current_contrast - source_contrast, 0.0);
+    float pattern_strength = smoothstep(0.08, 0.35, added_contrast);
+    vec3 average = localAverage(p, size);
+    return mix(color, average, pattern_strength * amount * 0.65);
+}
+
+vec3 reduceAddedLuminance(vec3 color, vec3 original, float amount) {
+    float current_luma = luminance(color);
+    float original_luma = luminance(original);
+    float difference = abs(current_luma - original_luma);
+    float intensity = smoothstep(0.12, 0.40, difference);
+    return mix(color, original, intensity * amount * 0.55);
+}
+
+vec3 reduceSaturatedRed(vec3 color, float amount) {
+    float other = max(color.g, color.b);
+    float red_dominance = max(color.r - other, 0.0);
+    float saturation = saturationAmount(color);
+    float red_strength = smoothstep(0.20, 0.65, red_dominance);
+    float saturation_strength = smoothstep(0.30, 0.80, saturation);
+    float reduction = red_strength * saturation_strength * amount;
+    float luma = luminance(color);
+    vec3 neutral = vec3(luma);
+    return mix(color, neutral, reduction * 0.40);
+}
+
+vec3 compressExtremeContrast(vec3 color, float amount) {
+    float luma = luminance(color);
+    float compressed_luma = mix(luma, smoothstep(0.0, 1.0, luma), 0.25 * amount);
+    if (luma > 0.0001)
+        color *= compressed_luma / luma;
+    color = mix(color, vec3(0.5) + (color - vec3(0.5)) * 0.90, amount * 0.35);
+    return color;
+}
+
+vec3 softenBrightness(vec3 color, float amount) {
+    float luma = luminance(color);
+    float excess = smoothstep(0.72, 0.92, luma);
+    return mix(color, color * 0.82, excess * amount);
+}
+
+vec3 mitigate(vec3 modified, vec3 original, ivec2 p, ivec2 size, float amount) {
+    vec3 color = modified;
+    color = reduceAddedPatternContrast(color, p, size, amount);
+    color = reduceAddedLuminance(color, original, amount);
+    color = reduceSaturatedRed(color, amount);
+    color = compressExtremeContrast(color, amount);
+    color = softenBrightness(color, amount);
+    return color;
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, size)))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    vec4 modified_frame = textureLod(samp, uv, 0.0);
+    vec4 original_frame = textureLod(originalFrame, uv, 0.0);
+    float amount = clamp(strength, 0.0, 1.0);
+    if (amount <= 0.0) {
+        imageStore(outputImage, pixel, modified_frame);
+        return;
+    }
+    vec3 color = mitigate(modified_frame.rgb, original_frame.rgb, pixel, size, amount);
+    imageStore(outputImage, pixel, vec4(clamp(color, 0.0, 1.0), modified_frame.a));
+}
