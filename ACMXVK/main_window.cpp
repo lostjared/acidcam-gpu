@@ -8,6 +8,18 @@ namespace acmxvk {
         constexpr int COLOR_TRANSFER_SMPTE2084 = 16;
         constexpr int COLOR_TRANSFER_ARIB_STD_B67 = 18;
 
+        template <typename Sprite>
+        constexpr bool HAS_ORIGINAL_FRAME_TEXTURE = requires(Sprite &sprite, const Sprite &source) {
+            sprite.shareOriginalFrameTexture(source);
+        };
+
+        template <typename Sprite>
+        void share_original_frame_texture(Sprite &sprite, const Sprite &source) {
+            if constexpr (HAS_ORIGINAL_FRAME_TEXTURE<Sprite>) {
+                sprite.shareOriginalFrameTexture(source);
+            }
+        }
+
         [[nodiscard]] std::string format_bitrate(std::uint64_t bytes_written, double duration_seconds) {
             if (duration_seconds <= 0.0 || !std::isfinite(duration_seconds)) {
                 return {};
@@ -4951,7 +4963,9 @@ namespace acmxvk {
         if (options.human_background) {
             pipeline.emplace_back(human_composite_shader_path(options));
         }
-        if (options.photosensitivity_mitigation) {
+        if (options.photosensitivity_mitigation && !HAS_ORIGINAL_FRAME_TEXTURE<mxvk::VK_Sprite>) {
+            std::cerr << "acmxvk: Photosensitivity Mitigation unavailable: installed MXVK lacks originalFrame binding 6 support; update MXVK\n";
+        } else if (options.photosensitivity_mitigation) {
             const fs::path mitigation = photosensitivity_mitigation_shader_path(options, hdr_input_precision_enabled);
             try {
                 if (!fs::is_regular_file(mitigation) || mxvk::inspect_spirv(mxvk::load_spv(mitigation.string())).stage != mxvk::ShaderStage::Compute) {
@@ -5047,7 +5061,6 @@ namespace acmxvk {
             } else if (historyCacheEnabled()) {
                 effect.historySource = frame_sprite;
             }
-            effect.originalFrameSource = frame_sprite;
             if (spectrumTextureEnabledForShaders()) {
                 effect.spectrumBinCount = spectrumBinCount();
             }
@@ -5061,6 +5074,9 @@ namespace acmxvk {
         const bool mitigation_appended = options.photosensitivity_mitigation && !pipeline.empty() && pipeline.back() == mitigation;
         try {
             post_process_sprites = attachPostProcessingShaders(effects);
+            for (mxvk::VK_Sprite *sprite : post_process_sprites) {
+                share_original_frame_texture(*sprite, *frame_sprite);
+            }
             if (mitigation_appended) {
                 photosensitivity_mitigation_post_process_index = post_process_sprites.size() - 1U;
             }
@@ -5073,6 +5089,9 @@ namespace acmxvk {
             pipeline.pop_back();
             effects.pop_back();
             post_process_sprites = attachPostProcessingShaders(effects);
+            for (mxvk::VK_Sprite *sprite : post_process_sprites) {
+                share_original_frame_texture(*sprite, *frame_sprite);
+            }
         }
         for (mxvk::VK_Sprite *sprite : post_process_sprites) {
             sprite->enableExtendedUBO();
