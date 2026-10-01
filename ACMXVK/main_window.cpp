@@ -765,7 +765,7 @@ namespace acmxvk {
             const int card_width = extent.width > 0U ? static_cast<int>(extent.width) : recording_width;
             const int card_height = extent.height > 0U ? static_cast<int>(extent.height) : recording_height;
             const fs::path card_font_path = overlay_font_path(options);
-            constexpr std::array<std::string_view, 2> PARAGRAPHS{"PHOTOSENSITIVITY WARNING", "This video may contain intense flashing lights and rapidly changing images."};
+            constexpr std::array<std::string_view, 2> PARAGRAPHS{"PHOTOSENSITIVITY WARNING","This video may contain rapidly changing images, high-contrast patterns, and intense visual motion."};
             const int margin = std::max(2, card_width / 16);
             const int max_text_width = card_width - 2 * margin;
             const int max_text_height = card_height - 2 * std::max(2, card_height / 12);
