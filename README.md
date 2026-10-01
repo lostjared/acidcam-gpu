@@ -18,7 +18,6 @@ The repository name, `acidcam-gpu`, is historical. The current application is
 **ACMX**, and the shared interface and ACMXVK backend are version **2.141.0**.
 The established ACMX2 engine retains its own backend version, **2.101.1**.
 
-
 ## Photosensitivity Mitigation
 
 ACMXVK now includes an optional built-in **Photosensitivity Mitigation** stage for visually intense shader chains.
@@ -47,6 +46,80 @@ Input
   -> User Effect Chain
   -> Output
 ```
+
+With mitigation enabled:
+
+```text
+Input
+  -> User Effect Chain
+  -> Photosensitivity Mitigation
+  -> Output
+```
+
+The mitigation pass always runs after the final user-selected effect, so existing shaders and effect chains do not need to be modified.
+
+### Adjustable Strength
+
+The mitigation strength can be adjusted from `0.0` to `1.0`.
+
+```text
+0.0   No mitigation
+0.45  Recommended starting point
+1.0   Strongest mitigation
+```
+
+A value around `0.45` provides a useful starting point for many visually intense effects while still preserving color, detail, and motion.
+
+The setting is persisted by the Qt interface and can be changed while ACMXVK is running.
+
+### Headless Rendering
+
+Photosensitivity Mitigation is also available through the ACMXVK command-line/headless rendering path.
+
+This makes it possible to use the same final processing stage for:
+
+- interactive playback
+- recorded output
+- PNG rendering
+- headless rendering
+- scripted or automated batch processing
+
+The feature is therefore not dependent on the Qt interface.
+
+### SDR and HDR Support
+
+Both SDR and HDR shader variants are included.
+
+The built-in mitigation shader supports:
+
+- `rgba8` SDR output
+- `rgba16f` HDR output
+
+The appropriate shader is compiled, installed, and loaded through the existing ACMXVK built-in shader system.
+
+### Original Frame Reference
+
+The mitigation stage receives both:
+
+```text
+samp          = processed output from the user's effect chain
+originalFrame = current unmodified source frame
+```
+
+`originalFrame` is the clean source image for the current frame. It is not a previous-frame history buffer.
+
+This allows the mitigation shader to estimate how much additional brightness, contrast, color intensity, and pattern complexity were introduced by the selected effects.
+
+### Sharing Intense Visuals
+
+For videos containing intense flashing, rapidly changing patterns, strong contrast, or other potentially uncomfortable visual effects, I also recommend using a visible photosensitivity warning before playback.
+
+When creating videos for public sharing, I use a warning card as the first frame and fade gradually into the animation. This gives viewers an opportunity to avoid the video before the most intense imagery begins.
+
+Photosensitivity Mitigation is intended as an additional tool for artists who want to reduce visual intensity before publishing their work.
+
+> **Important:** Photosensitivity Mitigation reduces some potentially problematic visual characteristics, but it does not guarantee that an image or video is safe for every photosensitive viewer. It should be treated as a mitigation tool, not a safety certification.
+
 ## Current status
 
 ACMX is usable on Linux, macOS, and Windows, with feature availability depending
