@@ -18,6 +18,35 @@ The repository name, `acidcam-gpu`, is historical. The current application is
 **ACMX**, and the shared interface and ACMXVK backend are version **2.141.0**.
 The established ACMX2 engine retains its own backend version, **2.101.1**.
 
+
+## Photosensitivity Mitigation
+
+ACMXVK now includes an optional built-in **Photosensitivity Mitigation** stage for visually intense shader chains.
+
+The mitigation shader runs as the final compute pass after the user's selected effects. It is designed to reduce some characteristics that may make highly animated or psychedelic visuals uncomfortable for photosensitive viewers while preserving as much of the original artwork as possible.
+
+The pass can selectively reduce:
+
+- extreme brightness and bright highlights
+- large luminance differences introduced by effects
+- excessive local contrast
+- dense, high-frequency visual patterns
+- strongly saturated red regions
+- some of the harsher visual intensity produced by complex effect chains
+
+Rather than simply dimming or desaturating the entire image, the shader compares the processed result with the current unmodified source frame and applies stronger mitigation where the effect chain has introduced unusually intense changes.
+
+### Optional Final Processing
+
+Photosensitivity Mitigation is completely optional.
+
+With mitigation disabled, ACMXVK uses the normal shader pipeline without modification:
+
+```text
+Input
+  -> User Effect Chain
+  -> Output
+
 ## Current status
 
 ACMX is usable on Linux, macOS, and Windows, with feature availability depending
