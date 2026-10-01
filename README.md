@@ -46,7 +46,7 @@ With mitigation disabled, ACMXVK uses the normal shader pipeline without modific
 Input
   -> User Effect Chain
   -> Output
-
+```
 ## Current status
 
 ACMX is usable on Linux, macOS, and Windows, with feature availability depending
