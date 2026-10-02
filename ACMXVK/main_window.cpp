@@ -772,7 +772,7 @@ namespace acmxvk {
             TTF_Font *font = nullptr;
             std::vector<std::string> lines;
             int line_spacing = 0;
-            for (int size = std::max(8, std::min({64, card_width / 18, card_height / 10})); size >= 4; --size) {
+            for (int size = std::max(8, std::min(card_width / 18, card_height / 10)); size >= 4; --size) {
                 font = TTF_OpenFont(card_font_path.string().c_str(), static_cast<float>(size));
                 if (font == nullptr) {
                     throw std::runtime_error("unable to open photosensitivity warning font: " + card_font_path.string());
