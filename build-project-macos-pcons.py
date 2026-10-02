@@ -119,10 +119,12 @@ def pcons_build(
     environment: dict[str, str],
     dry_run: bool,
 ) -> None:
+    # Pcons 0.30 changed project.Command(name, env, ...) to project.Command(env, ...).
+    # The MXVK and local build descriptions still use the earlier signature.
     command = [
         "uvx",
         "--from",
-        "pcons>=0.24",
+        "pcons==0.28.0",
         "pcons",
         "-B",
         str(build_dir),

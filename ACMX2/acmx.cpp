@@ -232,9 +232,6 @@ static std::filesystem::path installed_assets_directory() {
     return {};
 }
 
-/// @brief Copy the audio track from one media file to another via FFmpeg.
-void transfer_audio(std::string_view, std::string_view);
-
 static std::string safeGLString(GLenum name) {
     const GLubyte *value = glGetString(name);
     if (!value) {
