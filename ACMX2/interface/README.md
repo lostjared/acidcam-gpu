@@ -215,6 +215,22 @@ Interface version 2.141.0 includes the current ACMXVK integration increments:
 The remaining shared runtime controls are still ACMX2-only. ACMX2-specific
 binary-cache maintenance actions remain disabled when ACMXVK is selected.
 
+## ACMXVK photosensitivity options
+
+With **Backend > ACMXVK** selected, **Playback > Photosensitivity Mitigation**
+enables the final processing pass. **Playback > Photosensitivity Mitigation
+Strength...** accepts `0.0` through `1.0` and starts at `0.45`. Both settings
+persist across sessions and changes are sent to a running ACMXVK process. The
+controls are hidden for ACMX2.
+
+In **Settings > Output**, enable **Save Output to Video File** to make
+**Prepend 4-second photosensitivity warning** available. This adds a black
+warning card to the encoded ACMXVK video, followed by a half-second fade into
+the processed image. It is a separate setting from mitigation and is disabled
+for ACMX2. Audio in the recorded file begins after the card. An effect pack or
+shader library can declare `"intense_flashing": true`, but that label does not
+switch on the card automatically.
+
 ## ACMXVK Effect Packs
 
 Choose **Backend > ACMXVK**, then open **Playback > Effect Packs...**. The

@@ -72,6 +72,13 @@ A value around `0.45` provides a useful starting point for many visually intense
 
 The setting is persisted by the Qt interface and can be changed while ACMXVK is running.
 
+With the ACMXVK backend selected, use **Playback > Photosensitivity Mitigation**
+to toggle the pass and **Playback > Photosensitivity Mitigation Strength...** to
+set its strength. For a terminal or headless run, add
+`--photosensitivity-mitigation` and optionally
+`--photosensitivity-mitigation-strength 0.45`. The strength option accepts a
+value from `0` to `1` and does not enable the pass by itself.
+
 ### Headless Rendering
 
 Photosensitivity Mitigation is also available through the ACMXVK command-line/headless rendering path.
@@ -114,7 +121,17 @@ This allows the mitigation shader to estimate how much additional brightness, co
 
 For videos containing intense flashing, rapidly changing patterns, strong contrast, or other potentially uncomfortable visual effects, I also recommend using a visible photosensitivity warning before playback.
 
-When creating videos for public sharing, I use a warning card as the first frame and fade gradually into the animation. This gives viewers an opportunity to avoid the video before the most intense imagery begins.
+For ACMXVK encoded video, enable **Prepend 4-second photosensitivity warning**
+in the Qt **Settings** dialog's output section, or add
+`--photosensitivity-warning` to a command that also uses `--output`. The
+recording starts with a black card containing white warning text for four
+seconds, followed by a half-second fade into the processed video. The
+four-second card is added to encoded video, not PNG output. Its duration is
+added to the recording; source, file, or live audio is delayed to follow it.
+
+Authors can mark a Vulkan shader library or effect pack with
+`"intense_flashing": true` in `library.json` or `effect.json`. This metadata
+describes the content; it does not turn on the warning card or mitigation.
 
 Photosensitivity Mitigation is intended as an additional tool for artists who want to reduce visual intensity before publishing their work.
 

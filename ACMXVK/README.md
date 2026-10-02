@@ -48,6 +48,32 @@ Stable Diffusion processing.
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
 
+## Photosensitivity controls
+
+Use `--photosensitivity-mitigation` to append the built-in compute pass after
+the selected effects. `--photosensitivity-mitigation-strength <0..1>` sets its
+strength (default `0.45`); the strength option alone does not enable the pass.
+The pass compares the processed image with the current original input frame and
+has separate SDR and HDR shader variants. The installed MXVK must support the
+`originalFrame` binding, and the built-in shader must be available; ACMXVK logs
+an error and continues without mitigation if either requirement is missing.
+The Qt interface exposes a live toggle and strength control in **Playback**.
+
+For encoded video, `--photosensitivity-warning` adds a four-second black card
+with white warning text, then fades into the processed video over half a second.
+Use it with `--output <file>`; it cannot be used for PNG sequence output. The
+four-second card is part of the recorded SDR or HDR video. Audio copied
+from the source or muxed from a file or live input starts after the card. With
+video input, constant frame rate, and audio, ACMXVK fills skipped source-frame
+slots to keep the post-card video and audio aligned. Encoded 4:2:0 dimensions
+are padded to even values when needed.
+
+A source or runtime `library.json` and an effect pack's `effect.json` can set
+`"intense_flashing": true` to describe content. This Boolean is preserved by
+the library build and does not enable either photosensitivity option. The
+mitigation pass can reduce visual intensity but cannot certify that output is
+safe for photosensitive viewers.
+
 ## Source layout
 
 `acmx.cpp` is the compact process entry point. `main_window.hpp` and

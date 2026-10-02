@@ -36,6 +36,7 @@ The root object accepts the following fields. Unknown fields are errors.
 | `id` | yes | Stable ASCII token, up to 128 bytes. |
 | `name` | yes | Display name, up to 1024 bytes. |
 | `description` | no | Display description, up to 1024 bytes. |
+| `intense_flashing` | no | Boolean content label, default `false`; does not enable the recording warning card or mitigation pass. |
 | `icon` | no | Safe relative image path. |
 | `passes` | yes | One to 64 relative shader paths in execution order; repeats are allowed. |
 | `requires` | no | Resource requirements object. |
