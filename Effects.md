@@ -1,5 +1,11 @@
 # ACMXVK Effect Packs
 
+**Status (October 2026):** All ten planned implementation increments are
+complete. The plan below records the design and acceptance targets; the
+[current status](#current-status) lists the remaining validation work. For the
+implemented version 1 schema, use the
+[Effect Pack format guide](ACMXVK/EFFECT_PACK_FORMAT.md).
+
 ## Goal
 
 Add portable, self-contained effect packs that organize finished ACMXVK visual
@@ -13,12 +19,12 @@ custom-uniform storage, resource bindings, Deep Dream implementation, and live
 interface control. The feature is an organization and recall layer, not a new
 rendering architecture.
 
-## Estimated implementation
+## Implementation record
 
-The complete feature is planned as **10 increments**. Each increment should
-compile and have its own focused tests before the next begins.
+The feature was implemented in **10 increments**, each with focused build and
+test coverage. The increment plan below is retained as a development record.
 
-## Proposed version 1 layout
+## Version 1 layout example
 
 ```text
 dreaming-crystal/
@@ -42,7 +48,7 @@ keys. Compiler identity/version and the ACMXVK version that produced the cache
 are retained separately as diagnostic build provenance and do not normally
 invalidate otherwise compatible SPIR-V.
 
-## Proposed JSON contract
+## Version 1 JSON example
 
 ```json
 {
@@ -65,6 +71,7 @@ invalidate otherwise compatible SPIR-V.
     },
     "controls": [
         {
+            "id": "symmetry",
             "label": "Symmetry",
             "uniform": "symmetry",
             "minimum": 1.0,
@@ -81,7 +88,7 @@ invalidate otherwise compatible SPIR-V.
 }
 ```
 
-The final schema will also allow optional audio and MIDI sections. It will reject
+The implemented schema also allows optional audio and MIDI sections. It rejects
 unknown unsafe paths, absolute bundled-resource paths, parent traversal,
 duplicate control IDs or uniform declarations, invalid ranges, excessive
 counts, and Stable Diffusion fields. Duplicate pass paths are valid and retain

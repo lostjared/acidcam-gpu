@@ -7,9 +7,13 @@ engine. The goal is to preserve ACMX2's workflow and behavior while replacing
 the MX2/OpenGL rendering path with the installed
 [MXVK](https://github.com/lostjared/MXVK) engine and Vulkan SPIR-V shaders.
 
-The port is currently at **Increment 10A (HDR Increment 6 of 6)**. It is usable
-for video, camera, and still-image shader processing, but it is not yet a
-complete replacement for ACMX2.
+The six planned HDR increments and all ten planned Effect Pack implementation
+increments are complete. ACMXVK is usable for video, camera, and still-image
+shader processing, but it is not yet a complete replacement for ACMX2. OpenGL
+shader libraries still require translation to the Vulkan descriptor ABI; MIDI,
+CUDA filters, 3D rendering, and Stable Diffusion have the scope described below.
+Native macOS/Windows and live hardware validation for Effect Packs remains
+pending (see the [Effect Pack progress log](../Effects.md#current-status)).
 
 ## Translation progress
 
@@ -29,11 +33,6 @@ complete replacement for ACMX2.
 | Custom library uniforms | Implemented | Up to 64 validated floats from `library.json`, with repeatable `--uniform name=value` overrides and live updates from the ACMX Qt interface. |
 | Video recording | Implemented | MXWrite supports software or hardware encoders, encoder options, no-drop mode, duration and size limits, optional audio copying or audio-free `--mute-output` recording, source-timeline PTS, optional sequential or timeline-preserving constant-frame-rate encoding, audio-clock synchronization, and pipelined Vulkan readback. `--photosensitivity-warning` optionally prepends a four-second black warning card to encoded video; the Qt Output settings offer the same choice. A shader library's `library.json` or an effect pack's `effect.json` may set `"intense_flashing": true` to describe potentially intense flashing content. The metadata never enables the card automatically. Headless jobs emit media time, wall elapsed time, encoded size, and estimated remaining time; repeated headless input requires `--duration` and uses that complete target for progress. |
 | Snapshot and PNG output | Implemented | Supports full PNG sequences written to a specified directory, periodic generated frames, ACMX2-compatible one-shot `Z` PNG snapshots, optional lossless TIFF snapshots on `4`, optional lossless WebP snapshots on `5`, and headerless raw snapshots on `6`. HDR PNG/WebP output is SDR tone-mapped; HDR TIFF/raw output retains normalized RGBA16 samples. |
-
-Use `--png <directory>` with `--input <video>` to write a numbered sequence
-(`frame-00000000.png`, and so on) directly to that directory. PNG sequence
-output replaces `--output <video>`; it may be used with `--headless` and with
-Stable Diffusion processing.
 | Text overlays and watermark | Implemented | Provides an ACMX2-compatible preview HUD with shader, multipass chain, decoded video position/source duration, processing elapsed time, measured FPS, audio track, CUDA filter, and autopilot status. The native title bar identifies graphics, video, or capture mode; distinguishes preview from recording; and reports recording time, frame count, and current encoded file size. Slow video processing advances the video timer by decoded frames rather than wall time. `--disable-counter`, a configured watermark, or F9 hides the HUD; F9 can show it again when a watermark selected the hidden default. When both are visible, the HUD starts below the watermark. The HUD and title are excluded from readback, snapshots, and recordings; explicit filter/watermark overlays remain included in output. |
 | Rotation and final-output flip | Implemented | Applies input rotation and optional final display/recording flip. |
 | Runtime playback controls | Implemented | Supports video pause, rendering freeze, shader locking, wall-clock or audio-reactive shader time, time stepping/speed, and fullscreen switching. |
@@ -47,6 +46,11 @@ Stable Diffusion processing.
 | Stable Diffusion video | Initial implementation | Optional `-DWITH_STABLE_DIFFUSION=ON` builds launch one local stable-diffusion.cpp `sd-server` for image-to-image processing with optional ESRGAN or Vulkan compute upscale, or standalone ESRGAN upscale-only preprocessing. Both paths feed the Vulkan shader chain; headless encoded output uses sequential constant-frame-rate MXWrite recording. |
 | 3D model pipeline | Initial support | `--enable-3d` maps live video, camera, or still-image input onto MXVK's OBJ/MXMOD model renderer. Compatible fragments execute directly on model UVs; compute, history/spectrum, multipass, and playlist chains use a pre-model offscreen target whose result becomes the model texture. The camera starts at the normalized model center as a 120-degree skybox view with automatic rotation disabled. OBJ, MXMOD, and compressed MXMOD files are supported, with a bundled textured cube as the default. Mouse look/movement, automatic rotation, scale/speed controls, ACMX2-compatible camera oscillation and three-axis wave deformation, 2D/3D switching, recording, snapshots, and compatible MIDI-map actions are implemented. |
 | Qt interface integration | Initial integration | The ACMX Qt launcher selects ACMX2 or ACMXVK libraries, builds ACMXVK source manifests into an incremental hidden SPIR-V library, launches that output, and streams renderer output into its log. Live shader selection and source recompilation, custom uniforms, multipass chains, Repeat, Normalized Time, overlays, CUDA filter chains, Deep Dream configuration, and file-audio replacement are integrated into the ACMXVK workflow. |
+
+Use `--png <directory>` with `--input <video>` to write a numbered sequence
+(`frame-00000000.png`, and so on) directly to that directory. PNG sequence
+output replaces `--output <video>`; it may be used with `--headless` and with
+Stable Diffusion processing.
 
 ## Photosensitivity controls
 
