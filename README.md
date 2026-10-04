@@ -144,6 +144,14 @@ on the selected backend and build options. The portable shader paths do not
 require NVIDIA hardware. CUDA filters, CUDA/Vulkan interop, and Deep Dream are
 optional features for supported NVIDIA configurations.
 
+As of October 2026, the shared interface and ACMXVK are at **2.141.0** and
+ACMX2 is at **2.101.1**. ACMXVK's six-stage HDR port and all ten planned Effect
+Pack implementation increments are complete. Effect Packs include pack-local
+shader builds, live activation, saved controls, audio/MIDI mappings, optional
+Deep Dream settings, and project import/export. The remaining Effect Pack work
+is validation on native macOS and Windows builds and manual GPU, audio, MIDI,
+and cross-machine transfer checks; see the [progress log](Effects.md#current-status).
+
 - **ACMX2** is the mature OpenGL/libmx2 backend. It supports runtime GLSL,
   OpenGL fragment and compute chains, shader caching where the driver permits
   it, HDR video, headless processing, audio/MIDI, OpenCV DNN effects, and the
