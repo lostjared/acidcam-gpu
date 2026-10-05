@@ -1291,7 +1291,7 @@ void MainWindow::initControls() {
     });
 
     connect(process, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), this, [this](int exitCode, QProcess::ExitStatus exitStatus) {
-        if (!stdoutBuffer.isEmpty() && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stdoutBuffer))) {
+        if (!stdoutBuffer.isEmpty() && !(active_backend == acmx2::Backend::Acmxvk && stable_diffusion_enabled && is_stable_diffusion_diagnostic(stdoutBuffer)) && !(active_backend == acmx2::Backend::Acmxvk && is_acmxvk_interface_diagnostic(stdoutBuffer))) {
             queueProcessOutput(stdoutBuffer + "<br>");
         }
         appendOutputRunLog(stdoutBuffer);

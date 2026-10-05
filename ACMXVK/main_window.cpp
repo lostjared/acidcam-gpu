@@ -5104,13 +5104,12 @@ namespace acmxvk {
             }
         }
 
-        if (!options.interface_shm) {
-            std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
-            for (std::size_t index = 0; index < pipeline.size(); ++index) {
-                const bool compute = index < post_process_effect_stages.size() && post_process_effect_stages[index] == mxvk::ShaderStage::Compute;
-                std::cout << "  " << (index + 1) << ": " << pipeline[index].filename().string() << " [" << (compute ? "compute" : "fragment") << "]\n";
-            }
+        std::cout << "acmxvk: Vulkan shader pipeline (" << pipeline.size() << " passes):\n";
+        for (std::size_t index = 0; index < pipeline.size(); ++index) {
+            const bool compute = index < post_process_effect_stages.size() && post_process_effect_stages[index] == mxvk::ShaderStage::Compute;
+            std::cout << "  " << (index + 1) << ": " << pipeline[index].filename().string() << " [" << (compute ? "compute" : "fragment") << "]\n";
         }
+        std::cout.flush();
     }
 
     [[nodiscard]] bool MainWindow::readTrackedInputFrame() {
