@@ -779,10 +779,28 @@ edge image becomes the input to the selected fragment/compute pipeline:
     --enable-vsync
 ```
 
-The first frame can take longer because ACMXVK warms and benchmarks CPU and
-available CUDA DNN targets. Later frames retain the faster backend. If an
+ACMXVK prefers the OpenCV CUDA DNN backend, trying FP16 followed by FP32.
+It uses CPU if CUDA DNN targets are unavailable or both CUDA attempts fail.
+Later frames retain the selected backend. If an
 inference error occurs, edge processing is disabled once and the original
 input continues through the Vulkan pipeline.
+
+CUDA DNN requires OpenCV itself to be built with `WITH_CUDA=ON`,
+`WITH_CUDNN=ON`, and `OPENCV_DNN_CUDA=ON`. ACMXVK's `WITH_CUDA` option
+controls acidcam-gpu filters independently and does not enable CUDA inside
+an existing OpenCV installation. For Windows/vcpkg, install the DNN CUDA
+feature from the repository root, then rebuild ACMXVK:
+
+```powershell
+C:\vcpkg\vcpkg.exe install "opencv4[dnn-cuda]:x64-windows" --overlay-ports=overlays --recurse
+cmake --build ACMXVK/build-full --target acmxvk
+```
+
+Use your configured build directory in the second command. The NVIDIA driver,
+CUDA runtime, cuDNN DLLs, and rebuilt OpenCV DLLs must be available at runtime.
+Use the cuDNN DLLs for the same CUDA major version as your OpenCV build.
+If launching an older build directory, rebuild it to refresh its local OpenCV
+DLLs before running DNN effects.
 
 Pass a PP-HumanSeg-compatible ONNX model with `--human` to isolate the detected
 person before the shader chain. The default mode applies shaders to the isolated
@@ -1024,8 +1042,8 @@ Increment 8V begins the DNN port with ACMX2-compatible DexiNed edge detection.
 Configure with `-DWITH_OPENCV_DNN=ON`, then select an ONNX edge model with
 `--edge`. Each source frame is converted to the edge map before rotation,
 acidcam-gpu filtering, history insertion, 3D texture mapping, and the Vulkan
-shader chain. ACMXVK benchmarks the available OpenCV CPU and CUDA DNN backends
-on the first frame and retains the faster backend. This increment changes only
+shader chain. ACMXVK selects the available OpenCV CUDA DNN backend
+on the first frame, with CPU fallback if CUDA is unavailable or fails. This increment changes only
 ACMXVK; MXVK and acidcam-gpu do not need to be reinstalled. DNN-only builds use
 `-DWITH_OPENCV_DNN=ON -DWITH_CUDA=OFF` and have no `libacidcam-gpu.so`
 dependency.

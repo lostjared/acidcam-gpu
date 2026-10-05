@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -27,11 +26,6 @@ namespace acmxvk::dnn {
 
         struct BackendState {
             bool selected = false;
-        };
-
-        struct TimedOutput {
-            cv::Mat output;
-            double milliseconds = std::numeric_limits<double>::infinity();
         };
 
         [[nodiscard]] bool backendAvailable(cv::dnn::Backend backend, cv::dnn::Target target) {
@@ -62,19 +56,6 @@ namespace acmxvk::dnn {
             return output_name.empty() ? net.forward() : net.forward(output_name);
         }
 
-        [[nodiscard]] TimedOutput benchmarkBackend(cv::dnn::Net &net, const cv::Mat &blob, const cv::String &input_name, const cv::String &output_name) {
-            static_cast<void>(runForward(net, blob, input_name, output_name));
-
-            TimedOutput measured;
-            constexpr int TIMED_RUNS = 2;
-            const auto start = std::chrono::steady_clock::now();
-            for (int run = 0; run < TIMED_RUNS; ++run) {
-                measured.output = runForward(net, blob, input_name, output_name);
-            }
-            measured.milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / TIMED_RUNS;
-            return measured;
-        }
-
         [[nodiscard]] cv::Mat selectBackendAndForward(cv::dnn::Net &net, BackendState &state, const cv::Mat &blob, const cv::String &input_name, const cv::String &output_name) {
             if (state.selected) {
                 return runForward(net, blob, input_name, output_name);
@@ -85,28 +66,28 @@ namespace acmxvk::dnn {
             const bool fp32_available = backendAvailable(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA);
             if (!fp16_available && !fp32_available) {
                 setCpuBackend(net);
-                std::cout << "acmxvk: DNN backend: CPU (CUDA unavailable)\n";
+                std::cerr << "acmxvk: DNN backend: CPU (OpenCV reports no CUDA DNN targets). "
+                             "OpenCV must be built with WITH_CUDA=ON, WITH_CUDNN=ON and OPENCV_DNN_CUDA=ON "
+                             "(vcpkg: opencv4[dnn-cuda]); check the NVIDIA driver and the OpenCV/cuDNN DLLs loaded at runtime.\n";
                 return runForward(net, blob, input_name, output_name);
             }
 
-            setCpuBackend(net);
-            TimedOutput cpu = benchmarkBackend(net, blob, input_name, output_name);
-            const bool use_fp16 = fp16_available;
-            try {
-                setCudaBackend(net, use_fp16);
-                TimedOutput cuda = benchmarkBackend(net, blob, input_name, output_name);
-                if (cuda.milliseconds < cpu.milliseconds) {
-                    std::cout << "acmxvk: DNN backend: CUDA " << (use_fp16 ? "FP16" : "FP32") << " (" << cuda.milliseconds << " ms vs CPU " << cpu.milliseconds << " ms)\n";
-                    return cuda.output;
+            for (const bool use_fp16 : {true, false}) {
+                if (!(use_fp16 ? fp16_available : fp32_available)) {
+                    continue;
                 }
-                setCpuBackend(net);
-                std::cout << "acmxvk: DNN backend: CPU (" << cpu.milliseconds << " ms vs CUDA " << cuda.milliseconds << " ms)\n";
-                return cpu.output;
-            } catch (const cv::Exception &error) {
-                setCpuBackend(net);
-                std::cerr << "acmxvk: CUDA DNN benchmark failed; using CPU (" << cpu.milliseconds << " ms): " << error.what() << '\n';
-                return cpu.output;
+                try {
+                    setCudaBackend(net, use_fp16);
+                    cv::Mat output = runForward(net, blob, input_name, output_name);
+                    std::cout << "acmxvk: DNN backend: CUDA " << (use_fp16 ? "FP16" : "FP32") << '\n';
+                    return output;
+                } catch (const cv::Exception &error) {
+                    std::cerr << "acmxvk: CUDA DNN " << (use_fp16 ? "FP16" : "FP32") << " failed: " << error.what() << '\n';
+                }
             }
+            setCpuBackend(net);
+            std::cerr << "acmxvk: DNN backend: CPU (CUDA inference failed for this model)\n";
+            return runForward(net, blob, input_name, output_name);
         }
 
         [[nodiscard]] cv::String lastOutputName(const cv::dnn::Net &net) {
