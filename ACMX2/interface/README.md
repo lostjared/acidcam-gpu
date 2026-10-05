@@ -4,7 +4,7 @@ Qt-based GUI launcher for the ACMX2 and ACMXVK engines.
 
 ## Backend Integration
 
-Interface version 2.141.0 includes the current ACMXVK integration increments:
+Interface version 2.142.0 includes the current ACMXVK integration increments:
 
 - **Backend > ACMX2** and **Backend > ACMXVK** are exclusive, persisted
   selections.

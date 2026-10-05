@@ -15,7 +15,7 @@ libraries, live editing, custom uniforms, playlists, multipass effects, audio
 and MIDI controls, recording, and both rendering engines.
 
 The repository name, `acidcam-gpu`, is historical. The current application is
-**ACMX**, and the shared interface and ACMXVK backend are version **2.141.0**.
+**ACMX**, and the shared interface and ACMXVK backend are version **2.142.0**.
 The established ACMX2 engine retains its own backend version, **2.101.1**.
 
 ## Photosensitivity Mitigation
@@ -144,7 +144,7 @@ on the selected backend and build options. The portable shader paths do not
 require NVIDIA hardware. CUDA filters, CUDA/Vulkan interop, and Deep Dream are
 optional features for supported NVIDIA configurations.
 
-As of October 2026, the shared interface and ACMXVK are at **2.141.0** and
+As of October 2026, the shared interface and ACMXVK are at **2.142.0** and
 ACMX2 is at **2.101.1**. ACMXVK's six-stage HDR port and all ten planned Effect
 Pack implementation increments are complete. Effect Packs include pack-local
 shader builds, live activation, saved controls, audio/MIDI mappings, optional
