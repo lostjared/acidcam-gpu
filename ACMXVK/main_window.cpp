@@ -5930,6 +5930,7 @@ namespace acmxvk {
 
         for (std::size_t index = 0; index < post_process_sprites.size(); ++index) {
             mxvk::VK_Sprite *sprite = post_process_sprites[index];
+            share_original_frame_texture(*sprite, *frame_sprite);
             if (crossfade_active && index == crossfade_post_process_index) {
                 setPostProcessingShaderParams(index, crossfade_alpha, 0.0F, 0.0F, 0.0F);
             } else {
