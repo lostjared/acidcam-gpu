@@ -4233,7 +4233,7 @@ namespace acmxvk {
                 encode_options.hdr.color_range = video_hdr_info.color_range;
                 encode_options.hdr.mastering_display = video_hdr_info.mastering_display;
                 encode_options.hdr.content_light = video_hdr_info.content_light;
-                std::cout << "acmxvk: HDR output: HEVC Main10 with captured " << (hdr_transfer_hlg ? "BT.2020/HLG" : "BT.2020/PQ") << " color metadata (software libx265)\n";
+                std::cout << "acmxvk: HDR output: HEVC Main10 with captured " << (hdr_transfer_hlg ? "BT.2020/HLG" : "BT.2020/PQ") << " color metadata\n";
             }
 
             if (options.encode_bitrate > 0) {

@@ -1212,11 +1212,26 @@ bool Writer::openInternal(const std::string &filename,
     hdr_output = opts.hdr.enabled;
     hdr_info = opts.hdr;
 
-    if(hdr_output) {
-        const AVCodec *hdr_codec = avcodec_find_encoder_by_name("libx265");
-
-        if(!hdr_codec) {
-            std::cerr << "MXWrite: HDR output requested but libx265 encoder not available.\n";
+    if (hdr_output) {
+        const std::string hdr_preference = lowercase_ascii(codec_override ? *codec_override : opts.codec);
+        const bool prefer_nvenc = hdr_preference.empty() || hdr_preference == "auto" || hdr_preference == "nvenc" || hdr_preference == "hevc_nvenc" || hdr_preference == "h265_nvenc";
+        const bool prefer_software = hdr_preference == "software" || hdr_preference == "cpu" || hdr_preference == "hevc" || hdr_preference == "h265" || hdr_preference == "libx265";
+        if (!prefer_nvenc && !prefer_software) {
+            std::cerr << "MXWrite: HDR Main10 output requires hevc_nvenc or libx265; requested '" << hdr_preference << "'.\n";
+            avformat_free_context(format_ctx);
+            format_ctx = nullptr;
+            return false;
+        }
+        const AVCodec *hdr_codec = prefer_nvenc ? avcodec_find_encoder_by_name("hevc_nvenc") : nullptr;
+        bool hdr_nvenc = hdr_codec != nullptr;
+        if (!hdr_codec) {
+            if (prefer_nvenc) {
+                std::cerr << "MXWrite: HDR hevc_nvenc unavailable; trying libx265 Main10.\n";
+            }
+            hdr_codec = avcodec_find_encoder_by_name("libx265");
+        }
+        if (!hdr_codec) {
+            std::cerr << "MXWrite: no requested HDR Main10 encoder available. This FFmpeg build needs hevc_nvenc or libx265.\n";
             avformat_free_context(format_ctx);
             format_ctx = nullptr;
             return false;
@@ -1224,7 +1239,7 @@ bool Writer::openInternal(const std::string &filename,
 
         stream = avformat_new_stream(format_ctx, hdr_codec);
 
-        if(!stream) {
+        if (!stream) {
             std::cerr << "MXWrite: could not create HDR stream.\n";
             avformat_free_context(format_ctx);
             format_ctx = nullptr;
@@ -1236,107 +1251,108 @@ bool Writer::openInternal(const std::string &filename,
         AVRational tb_hdr = {fps_den, fps_num};
         stream->time_base = tb_hdr;
 
-        codec_ctx = avcodec_alloc_context3(hdr_codec);
+        bool hdr_options_rejected = false;
+        auto open_hdr_encoder = [&]() -> int {
+            codec_ctx = avcodec_alloc_context3(hdr_codec);
 
-        if(!codec_ctx) {
-            std::cerr << "MXWrite: could not allocate HDR codec context.\n";
-            avformat_free_context(format_ctx);
-            format_ctx = nullptr;
-            return false;
-        }
-
-        codec_ctx->width = width;
-        codec_ctx->height = height;
-        codec_ctx->time_base = stream->time_base;
-        codec_ctx->framerate = AVRational{fps_num, fps_den};
-        codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P10LE;
-        codec_ctx->profile = AV_PROFILE_HEVC_MAIN_10;
-        codec_ctx->bits_per_raw_sample = 10;
-        codec_ctx->gop_size = 30;
-        codec_ctx->max_b_frames = 0;
-        codec_ctx->thread_count = std::max(1u, std::thread::hardware_concurrency());
-        codec_ctx->thread_type = FF_THREAD_SLICE;
-        codec_ctx->delay = 0;
-        codec_ctx->bit_rate = std::max<std::int64_t>(0, opts.bit_rate);
-
-        codec_ctx->color_primaries = static_cast<AVColorPrimaries>(
-            hdr_info.color_primaries ? hdr_info.color_primaries : AVCOL_PRI_BT2020
-        );
-
-        codec_ctx->color_trc = static_cast<AVColorTransferCharacteristic>(
-            hdr_info.color_trc ? hdr_info.color_trc : AVCOL_TRC_SMPTE2084
-        );
-
-        codec_ctx->colorspace = static_cast<AVColorSpace>(
-            hdr_info.color_space ? hdr_info.color_space : AVCOL_SPC_BT2020_NCL
-        );
-
-        codec_ctx->color_range = static_cast<AVColorRange>(
-            hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG
-        );
-
-        codec_ctx->chroma_sample_location = AVCHROMA_LOC_LEFT;
-
-        std::string preset_hdr =
-            opts.preset.empty() ? std::string("medium") : opts.preset;
-
-        av_opt_set(codec_ctx->priv_data, "preset", preset_hdr.c_str(), 0);
-
-        if(opts.bit_rate <= 0) {
-            int crf_val_hdr = opts.crf;
-
-            if(crf_val_hdr < 0) {
-                crf_val_hdr = 0;
+            if (!codec_ctx) {
+                std::cerr << "MXWrite: could not allocate HDR codec context.\n";
+                return AVERROR(ENOMEM);
             }
 
-            if(crf_val_hdr > 51) {
-                crf_val_hdr = 51;
+            codec_ctx->width = width;
+            codec_ctx->height = height;
+            codec_ctx->time_base = stream->time_base;
+            codec_ctx->framerate = AVRational{fps_num, fps_den};
+            codec_ctx->pix_fmt = hdr_nvenc ? AV_PIX_FMT_P010LE : AV_PIX_FMT_YUV420P10LE;
+            codec_ctx->profile = AV_PROFILE_HEVC_MAIN_10;
+            codec_ctx->bits_per_raw_sample = 10;
+            codec_ctx->gop_size = 30;
+            codec_ctx->max_b_frames = 0;
+            codec_ctx->thread_count = std::max(1u, std::thread::hardware_concurrency());
+            codec_ctx->thread_type = FF_THREAD_SLICE;
+            codec_ctx->delay = 0;
+            codec_ctx->bit_rate = std::max<std::int64_t>(0, opts.bit_rate);
+
+            codec_ctx->color_primaries = static_cast<AVColorPrimaries>(hdr_info.color_primaries ? hdr_info.color_primaries : AVCOL_PRI_BT2020);
+
+            codec_ctx->color_trc = static_cast<AVColorTransferCharacteristic>(hdr_info.color_trc ? hdr_info.color_trc : AVCOL_TRC_SMPTE2084);
+
+            codec_ctx->colorspace = static_cast<AVColorSpace>(hdr_info.color_space ? hdr_info.color_space : AVCOL_SPC_BT2020_NCL);
+
+            codec_ctx->color_range = static_cast<AVColorRange>(hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
+
+            codec_ctx->chroma_sample_location = AVCHROMA_LOC_LEFT;
+
+            const std::string preset_hdr = opts.preset.empty() ? "medium" : opts.preset;
+            const std::string quality = std::to_string(std::clamp(opts.crf, 0, 51));
+            std::vector<FfmpegOption> hdr_options = hdr_nvenc ? extra_options : software_fallback_options(extra_options, true);
+            if (hdr_nvenc) {
+                av_opt_set(codec_ctx->priv_data, "preset", x264_preset_to_nvenc(preset_hdr), 0);
+                const std::string requested_tune = lowercase_ascii(opts.tune);
+                const std::string tune = opts.realtime ? "ll" : (is_nvenc_tune(requested_tune) ? requested_tune : "hq");
+                av_opt_set(codec_ctx->priv_data, "tune", tune.c_str(), 0);
+                av_opt_set(codec_ctx->priv_data, "profile", "main10", 0);
+                const std::string *custom_tune = find_ffmpeg_option(hdr_options, "tune");
+                if (tune != "lossless" && !(custom_tune && lowercase_ascii(*custom_tune) == "lossless")) {
+                    av_opt_set(codec_ctx->priv_data, "rc", "vbr", 0);
+                    if (opts.bit_rate <= 0) {
+                        av_opt_set(codec_ctx->priv_data, "cq", quality.c_str(), 0);
+                    }
+                }
+                if (opts.realtime) {
+                    av_opt_set(codec_ctx->priv_data, "zerolatency", "1", 0);
+                }
+            } else {
+                const std::string software_preset = nvenc_preset_to_software(preset_hdr);
+                av_opt_set(codec_ctx->priv_data, "preset", software_preset.c_str(), 0);
+                if (opts.bit_rate <= 0) {
+                    av_opt_set(codec_ctx->priv_data, "crf", quality.c_str(), 0);
+                }
+                const std::string tune = opts.realtime ? "zerolatency" : lowercase_ascii(opts.tune);
+                if (!tune.empty() && tune != "none" && !is_nvenc_tune(tune)) {
+                    av_opt_set(codec_ctx->priv_data, "tune", tune.c_str(), 0);
+                }
+                const char *x265_params = codec_ctx->color_trc == AVCOL_TRC_ARIB_STD_B67 ? "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc:range=limited:repeat-headers=1" : "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:range=limited:repeat-headers=1";
+                av_opt_set(codec_ctx->priv_data, "x265-params", x265_params, 0);
+            }
+            if (pixel_format_option && requested_pixel_format != codec_ctx->pix_fmt) {
+                std::cerr << "MXWrite: HDR output requires " << av_get_pix_fmt_name(codec_ctx->pix_fmt) << "; ignoring requested pixel format '" << *pixel_format_option << "'.\n";
+            }
+            if (!apply_ffmpeg_options(hdr_options, codec_ctx, format_ctx)) {
+                hdr_options_rejected = true;
+                return AVERROR(EINVAL);
             }
 
-            const std::string crf_hdr = std::to_string(crf_val_hdr);
-            av_opt_set(codec_ctx->priv_data, "crf", crf_hdr.c_str(), 0);
+            time_base = tb_hdr;
+
+            if (format_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
+                codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            }
+
+            return avcodec_open2(codec_ctx, hdr_codec, nullptr);
+        };
+        int hdr_result = open_hdr_encoder();
+        if (hdr_result < 0 && hdr_nvenc && !hdr_options_rejected) {
+            char error_text[AV_ERROR_MAX_STRING_SIZE] = {};
+            av_strerror(hdr_result, error_text, sizeof(error_text));
+            std::cerr << "MXWrite: HDR hevc_nvenc failed: " << error_text << "; trying libx265 Main10.\n";
+            avcodec_free_context(&codec_ctx);
+            hdr_codec = avcodec_find_encoder_by_name("libx265");
+            hdr_nvenc = false;
+            hdr_result = hdr_codec ? open_hdr_encoder() : AVERROR_ENCODER_NOT_FOUND;
         }
-
-        std::string x265_params =
-            "profile=main10:colorprim=bt2020:transfer=smpte2084:"
-            "colormatrix=bt2020nc:range=limited:repeat-headers=1";
-
-        if(codec_ctx->color_trc == AVCOL_TRC_ARIB_STD_B67) {
-            x265_params =
-                "profile=main10:colorprim=bt2020:transfer=arib-std-b67:"
-                "colormatrix=bt2020nc:range=limited:repeat-headers=1";
-        }
-
-        av_opt_set(codec_ctx->priv_data, "x265-params", x265_params.c_str(), 0);
-
-        if(pixel_format_option && requested_pixel_format != AV_PIX_FMT_YUV420P10LE) {
-            std::cerr
-                << "MXWrite: HDR output forces yuv420p10le; ignoring requested pixel format '"
-                << *pixel_format_option << "'.\n";
-        }
-
-        if(!apply_ffmpeg_options(extra_options, codec_ctx, format_ctx)) {
+        if (hdr_result < 0) {
+            char error_text[AV_ERROR_MAX_STRING_SIZE] = {};
+            av_strerror(hdr_result, error_text, sizeof(error_text));
+            std::cerr << "MXWrite: could not open HDR Main10 encoder: " << error_text << ".\n";
             avcodec_free_context(&codec_ctx);
             avformat_free_context(format_ctx);
             format_ctx = nullptr;
             return false;
         }
 
-        time_base = tb_hdr;
-
-        if(format_ctx->oformat->flags & AVFMT_GLOBALHEADER) {
-            codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        }
-
-        if(avcodec_open2(codec_ctx, hdr_codec, nullptr) < 0) {
-            std::cerr << "MXWrite: could not open libx265 for HDR output.\n";
-            avcodec_free_context(&codec_ctx);
-            avformat_free_context(format_ctx);
-            format_ctx = nullptr;
-            return false;
-        }
-
-        if(avcodec_parameters_from_context(stream->codecpar, codec_ctx) < 0) {
+        if (avcodec_parameters_from_context(stream->codecpar, codec_ctx) < 0) {
             std::cerr << "MXWrite: could not copy HDR codec parameters.\n";
             avcodec_free_context(&codec_ctx);
             avformat_free_context(format_ctx);
@@ -1344,53 +1360,34 @@ bool Writer::openInternal(const std::string &filename,
             return false;
         }
 
-        auto attach_side =
-            [&](AVPacketSideDataType type, const std::vector<uint8_t> &payload) {
-                if(payload.empty()) {
-                    return;
-                }
+        auto attach_side = [&](AVPacketSideDataType type, const std::vector<uint8_t> &payload) {
+            if (payload.empty()) {
+                return;
+            }
 
-                uint8_t *buf =
-                    static_cast<uint8_t *>(av_malloc(payload.size()));
+            uint8_t *buf = static_cast<uint8_t *>(av_malloc(payload.size()));
 
-                if(!buf) {
-                    return;
-                }
+            if (!buf) {
+                return;
+            }
 
-                std::memcpy(buf, payload.data(), payload.size());
+            std::memcpy(buf, payload.data(), payload.size());
 
-                const AVPacketSideData *added =
-                    av_packet_side_data_add(
-                        &stream->codecpar->coded_side_data,
-                        &stream->codecpar->nb_coded_side_data,
-                        type,
-                        buf,
-                        payload.size(),
-                        0
-                    );
+            const AVPacketSideData *added = av_packet_side_data_add(&stream->codecpar->coded_side_data, &stream->codecpar->nb_coded_side_data, type, buf, payload.size(), 0);
 
-                if(!added) {
-                    av_free(buf);
-                    std::cerr
-                        << "MXWrite: failed to attach HDR side data (type "
-                        << static_cast<int>(type) << ").\n";
-                }
-            };
+            if (!added) {
+                av_free(buf);
+                std::cerr << "MXWrite: failed to attach HDR side data (type " << static_cast<int>(type) << ").\n";
+            }
+        };
 
-        attach_side(
-            AV_PKT_DATA_MASTERING_DISPLAY_METADATA,
-            hdr_info.mastering_display
-        );
+        attach_side(AV_PKT_DATA_MASTERING_DISPLAY_METADATA, hdr_info.mastering_display);
 
-        attach_side(
-            AV_PKT_DATA_CONTENT_LIGHT_LEVEL,
-            hdr_info.content_light
-        );
+        attach_side(AV_PKT_DATA_CONTENT_LIGHT_LEVEL, hdr_info.content_light);
 
-        if(!(format_ctx->oformat->flags & AVFMT_NOFILE)) {
-            if(avio_open(&format_ctx->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) {
-                std::cerr << "MXWrite: could not open HDR output file: "
-                          << filename << "\n";
+        if (!(format_ctx->oformat->flags & AVFMT_NOFILE)) {
+            if (avio_open(&format_ctx->pb, filename.c_str(), AVIO_FLAG_WRITE) < 0) {
+                std::cerr << "MXWrite: could not open HDR output file: " << filename << "\n";
 
                 avcodec_free_context(&codec_ctx);
                 avformat_free_context(format_ctx);
@@ -1399,7 +1396,7 @@ bool Writer::openInternal(const std::string &filename,
             }
         }
 
-        if(avformat_write_header(format_ctx, nullptr) < 0) {
+        if (avformat_write_header(format_ctx, nullptr) < 0) {
             std::cerr << "MXWrite: error writing HDR MP4 header.\n";
             avio_closep(&format_ctx->pb);
             avcodec_free_context(&codec_ctx);
@@ -1412,7 +1409,7 @@ bool Writer::openInternal(const std::string &filename,
 
         frame10 = av_frame_alloc();
 
-        if(!frame10) {
+        if (!frame10) {
             std::cerr << "MXWrite: could not allocate YUV420P10LE frame.\n";
             avio_closep(&format_ctx->pb);
             avcodec_free_context(&codec_ctx);
@@ -1425,7 +1422,7 @@ bool Writer::openInternal(const std::string &filename,
         frame10->width = width;
         frame10->height = height;
 
-        if(av_frame_get_buffer(frame10, 32) < 0) {
+        if (av_frame_get_buffer(frame10, 32) < 0) {
             std::cerr << "MXWrite: could not allocate YUV420P10LE buffer.\n";
             av_frame_free(&frame10);
             avio_closep(&format_ctx->pb);
@@ -1437,11 +1434,12 @@ bool Writer::openInternal(const std::string &filename,
 
         opened = true;
         use_hw_encode = false;
+        active_encoder_hardware = hdr_nvenc;
         recordingStart = std::chrono::steady_clock::now();
         startEncoderThread();
 
         std::cout
-            << "MXWrite: HDR output active (libx265 Main10, BT.2020, "
+            << "MXWrite: HDR output active (" << hdr_codec->name << " Main10, BT.2020, "
             << (codec_ctx->color_trc == AVCOL_TRC_ARIB_STD_B67 ? "HLG" : "PQ")
             << ")\n";
 
@@ -2604,6 +2602,37 @@ void Writer::encodeAndWriteFrame(AVFrame *in_frame) {
             frame10->colorspace = static_cast<AVColorSpace>(hdr_info.color_space ? hdr_info.color_space : AVCOL_SPC_BT2020_NCL);
             frame10->color_range = static_cast<AVColorRange>(hdr_info.color_range ? hdr_info.color_range : AVCOL_RANGE_MPEG);
             encode_frame = frame10;
+        }
+        if (codec_ctx->pix_fmt == AV_PIX_FMT_P010LE) {
+            uploaded_frame = av_frame_alloc();
+            if (!uploaded_frame) {
+                return;
+            }
+            uploaded_frame->format = AV_PIX_FMT_P010LE;
+            uploaded_frame->width = width;
+            uploaded_frame->height = height;
+            if (av_frame_get_buffer(uploaded_frame, 32) < 0 || av_frame_copy_props(uploaded_frame, encode_frame) < 0) {
+                releaseFrame(uploaded_frame);
+                return;
+            }
+            // P010 stores 10-bit samples in the high bits and interleaves U/V.
+            for (int y = 0; y < height; ++y) {
+                const auto *source = reinterpret_cast<const uint16_t *>(encode_frame->data[0] + y * encode_frame->linesize[0]);
+                auto *target = reinterpret_cast<uint16_t *>(uploaded_frame->data[0] + y * uploaded_frame->linesize[0]);
+                for (int x = 0; x < width; ++x) {
+                    target[x] = source[x] << 6;
+                }
+            }
+            for (int y = 0; y < (height + 1) / 2; ++y) {
+                const auto *u = reinterpret_cast<const uint16_t *>(encode_frame->data[1] + y * encode_frame->linesize[1]);
+                const auto *v = reinterpret_cast<const uint16_t *>(encode_frame->data[2] + y * encode_frame->linesize[2]);
+                auto *target = reinterpret_cast<uint16_t *>(uploaded_frame->data[1] + y * uploaded_frame->linesize[1]);
+                for (int x = 0; x < (width + 1) / 2; ++x) {
+                    target[2 * x] = u[x] << 6;
+                    target[2 * x + 1] = v[x] << 6;
+                }
+            }
+            encode_frame = uploaded_frame;
         }
     } else if (use_hw_encode && in_frame->format == AV_PIX_FMT_RGBA) {
         uploaded_frame = av_frame_alloc();
