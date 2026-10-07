@@ -15,6 +15,17 @@ CUDA filters, 3D rendering, and Stable Diffusion have the scope described below.
 Native macOS/Windows and live hardware validation for Effect Packs remains
 pending (see the [Effect Pack progress log](../Effects.md#current-status)).
 
+## Recent fixes
+
+- Original-frame textures are now shared with every post-processing pass on
+  each frame. This keeps effects that compare against the original input,
+  including Photosensitivity Mitigation, using the current source texture.
+- HDR recording now prefers `hevc_nvenc` for HEVC Main10 output and falls back
+  to `libx265` if NVENC is unavailable or fails to initialize. Use
+  `--encode-codec libx265` to select software encoding explicitly. Both paths
+  preserve the source PQ/HLG signaling and HDR metadata; see
+  [MXWrite HDR output](../MXWrite/README.md#hdr-output) for encoder details.
+
 ## Translation progress
 
 | Area | Status | Notes |
@@ -103,7 +114,9 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 - MXVK 0.34.1 or newer with the HDR increment 4 RGBA16 readback API, built with
   `-DVALIDATION=ON -DCV=ON`
 - MXWrite from the MXVK source tree
-- An FFmpeg build containing the `libx265` encoder for HDR Main10 recording
+- An FFmpeg build containing `hevc_nvenc` or `libx265` for HDR Main10 recording;
+  NVENC requires a compatible NVIDIA GPU and driver, and `libx265` supplies
+  the software fallback
 - SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
 - Optional libtiff development files for `-DTIFF=ON` lossless snapshots
 - Optional libwebp development files for `-DWEBP=ON` lossless snapshots
@@ -1270,11 +1283,13 @@ PQ or HLG transfer passes, so shader inputs, intermediate values, texture
 history, and crossfade history are linear BT.2020. It transfer-encodes the
 result and reads the final RGBA16F target back as normalized RGBA16. Increment
 5 sends that buffer directly to MXWrite, which converts encoded BT.2020 RGB to
-limited-range YUV420P10LE and writes HEVC Main10 with the source PQ/HLG,
+limited-range P010 for NVENC or YUV420P10LE for libx265 and writes HEVC Main10
+with the source PQ/HLG,
 primaries, matrix, range, mastering-display, and content-light metadata.
 Explicit and source-timeline timestamps use the same writer queue as SDR, and
 the existing post-encode audio copy/mux paths are unchanged. HDR recording
-selects software `libx265` automatically and requires even output dimensions.
+prefers `hevc_nvenc` with a software `libx265` fallback and requires even output
+dimensions. Use `--encode-codec libx265` to request software encoding directly.
 Increment 6 renders the 3D texture consumer into an RGBA16F final target, so
 3D output uses that same Main10 path. A presentation-only PQ/HLG tone mapper
 converts BT.2020 to BT.709/sRGB for an SDR window without changing the encoded
