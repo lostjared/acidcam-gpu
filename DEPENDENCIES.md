@@ -1,9 +1,12 @@
 # Dependencies and licenses
 
 This document catalogs the direct build dependencies and notable supporting
-components used by acidcam-gpu, ACMX2, and the related tools in this
+components used by ACMX2, ACMXVK, acidcam-gpu, and the related tools in this
 repository. It is based on the repository's CMake files, build scripts, and
-source includes as of July 27, 2026.
+source includes as of October 8, 2026. For build commands, see the
+[ACMX2 guide](ACMX2/README.md#building),
+[ACMXVK guide](ACMXVK/README.md#build), and
+[shared interface guide](ACMX2/interface/README.md#building).
 
 ## Project license
 
@@ -86,14 +89,56 @@ dependencies and must be checked against the particular libmx2 build.
 | `WEBP=ON` | libwebp | HDR snapshots in WebP format | BSD-3-Clause |
 | `TIFF=ON` | libtiff | 16-bit TIFF snapshots | libtiff license (BSD-like permissive license) |
 
-`WITH_CUDA` defaults to `ON` in `ACMX2/CMakeLists.txt`, but it can be disabled
-with `-DWITH_CUDA=OFF`. `WITH_OPENCV_DNN`, `AUDIO`, `MIDI`, `WEBP`, and `TIFF`
-default to `OFF`.
+ACMX2's `WITH_CUDA` defaults to `ON` on Linux and `OFF` on macOS and Windows.
+Use `-DWITH_CUDA=OFF` explicitly for a portable OpenGL build.
+`WITH_OPENCV_DNN`, `AUDIO`, `MIDI`, `WEBP`, and `TIFF` default to `OFF`.
+
+## ACMXVK dependencies
+
+ACMXVK uses a separate Vulkan/SDL3 dependency stack. An ACMX2/libmx2
+installation does not supply MXVK or replace the SDL3 packages. The core build
+requires a C++20 compiler, CMake 3.20 or newer, and the following components:
+
+| Component | How it is used |
+| --- | --- |
+| MXVK 0.34.1 or newer | Vulkan rendering, capture, model loading, and HDR APIs; install a current build with `CV=ON` |
+| Vulkan 1.4 and `glslc` | Graphics/compute API and build-time compilation of bundled shaders to SPIR-V |
+| SDL3 and SDL3_ttf | Windowing, input, and text rendering |
+| OpenCV | Camera capture, still-image loading, and image processing |
+| FFmpeg libraries | `libavcodec`, `libavformat`, `libavutil`, `libswscale`, and `libswresample` |
+| MXWrite | Built from this repository's `MXWrite/` by default; an installed compatible package can be selected with `ACMXVK_USE_BUNDLED_MXWRITE=OFF` |
+| PNG, zlib, and GLM | Image output, compression, and mathematics |
+| jsoncpp | Shader-library and effect-pack metadata; required even with Stable Diffusion disabled |
+| Threads and pkg-config/pkgconf | Thread support and dependency discovery, including the Windows/vcpkg build |
+
+The installed MXVK package can additionally require SDL3_mixer, JPEG, or CUDA
+according to its exported dependencies. A CUDA-enabled MXVK installation also
+requires CUDA-enabled OpenCV with `cudaarithm`, even when ACMXVK's acidcam-gpu
+filter option is disabled. For a build without CUDA dependencies, install MXVK
+without CUDA as well.
+
+### ACMXVK optional compile-time components
+
+| CMake option | Additional requirements | Purpose |
+| --- | --- | --- |
+| `WITH_CUDA=ON` | CUDA Toolkit, CUDA-enabled MXVK/OpenCV, and an installed acidcam-gpu CMake package | CUDA filter chains |
+| `WITH_OPENCV_DNN=ON` | OpenCV `dnn` module | Edge detection, human segmentation, and generic ONNX processing; YAML configuration uses OpenCV FileStorage |
+| `WITH_DEEP_DREAM=ON` | CUDA Toolkit, CUDA-enabled LibTorch, and OpenCV `cudaarithm`/`cudawarping` | Deep Dream processing; model export additionally uses Torchvision |
+| `WITH_STABLE_DIFFUSION=ON` | libcurl and a compatible local `sd-server` from the maintained stable-diffusion.cpp fork | Image-to-image video processing and ESRGAN integration |
+| `AUDIO=ON` / `MIDI=ON` | RtAudio / RtMidi | Audio capture/reactivity and MIDI input |
+| `WEBP=ON` / `TIFF=ON` | libwebp / libtiff | Lossless snapshots |
+| `VALIDATION=ON` | Vulkan validation layers at runtime | Vulkan diagnostics |
+| `ACMXVK_USE_MOLTENVK=ON` | MoltenVK and a compatible non-CUDA MXVK installation | Vulkan portability on macOS; enabled by default on Apple platforms |
+
+The feature options above default to `OFF` except `ACMXVK_USE_MOLTENVK` on
+Apple platforms. Deep Dream and OpenCV DNN do not require ACMXVK's
+`WITH_CUDA` filter option. Model files and the Stable Diffusion server are
+separate runtime resources; enabling their client code does not download them.
 
 ## Standalone acidcam-gpu library
 
 The `acidcam-gpu/` CMake project is the optional CUDA implementation used by
-ACMX2. When this subproject is built on its own, its direct dependencies are:
+ACMX2 and ACMXVK. When this subproject is built on its own, its direct dependencies are:
 
 | Component | Required | Upstream license/terms |
 | --- | --- | --- |
@@ -106,7 +151,11 @@ ACMX2. When this subproject is built on its own, its direct dependencies are:
 ## Graphical interface and companion tools
 
 These are separate executables and are not needed to compile the ACMX2
-command-line engine.
+or ACMXVK command-line engine. The shared interface requires FFmpeg
+development libraries (`libavcodec`, `libavformat`, and `libavutil`) for native
+media inspection; a separate `ffprobe` executable is not required. The
+interface CMake target uses C++17 and supports Qt 6 or Qt 5.15, while both
+rendering engines use C++20.
 
 | Target | Component(s) | Upstream license |
 | --- | --- | --- |

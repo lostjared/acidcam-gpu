@@ -113,11 +113,14 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
 - Vulkan SDK 1.4 with `glslc`
 - MXVK 0.34.1 or newer with the HDR increment 4 RGBA16 readback API, built with
   `-DVALIDATION=ON -DCV=ON`
-- MXWrite from the MXVK source tree
+- The repository-local `MXWrite/` source, built automatically by default;
+  use `-DACMXVK_USE_BUNDLED_MXWRITE=OFF` only with an installed compatible
+  MXWrite package
 - An FFmpeg build containing `hevc_nvenc` or `libx265` for HDR Main10 recording;
   NVENC requires a compatible NVIDIA GPU and driver, and `libx265` supplies
   the software fallback
-- SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, and FFmpeg development files
+- SDL3, SDL3_ttf, Vulkan, OpenCV, PNG, ZLIB, glm, jsoncpp, and FFmpeg development files
+- pkg-config or pkgconf for dependency discovery, including Windows/vcpkg
 - Optional libtiff development files for `-DTIFF=ON` lossless snapshots
 - Optional libwebp development files for `-DWEBP=ON` lossless snapshots
 - Optional SDL3_mixer, JPEG, and CUDA dependencies when enabled by the installed MXVK package
@@ -131,7 +134,7 @@ standard out-of-class definitions in `main_window.cpp`. The former ordered
   only to export the supplied VGG16 and Inception V3 model formats. On Arch
   Linux these are commonly provided by `cuda`, `cudnn`, `opencv-cuda`,
   `python-pytorch-cuda`, and `python-torchvision-cuda`.
-- Optional libcurl and jsoncpp development files, plus a compatible
+- Optional libcurl development files, plus a compatible
   stable-diffusion.cpp `sd-server` executable, when building with
   `-DWITH_STABLE_DIFFUSION=ON`.
 
@@ -159,6 +162,37 @@ cmake --build build/acmxvk --target uninstall
 
 Audio and MIDI support are optional and remain disabled when their CMake
 options are omitted.
+
+### Windows (MSVC and vcpkg)
+
+Native Windows builds support MSVC with vcpkg. Install the Vulkan SDK and
+matching x64 dependency packages, then build and install MXVK with the same
+compiler, triplet, and runtime as ACMXVK. The selected MXVK package must meet
+the version and HDR API requirements above. Keep `glslc` on `PATH`.
+
+From the repository root in a Visual Studio developer PowerShell, configure
+with the vcpkg toolchain and the prefix containing your installed MXVK:
+
+```powershell
+cmake -S ACMXVK -B build/acmxvk-msvc -G "Visual Studio 17 2022" -A x64 `
+    -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+    -DVCPKG_TARGET_TRIPLET=x64-windows `
+    -DCMAKE_PREFIX_PATH=C:/acmx-deps `
+    -DWITH_CUDA=OFF
+cmake --build build/acmxvk-msvc --config Release --parallel
+./build/acmxvk-msvc/Release/acmxvk.exe --help
+cmake --install build/acmxvk-msvc --config Release --prefix C:/acmx-install
+```
+
+Replace the example vcpkg and dependency paths with your local installations.
+Visual Studio is a multi-configuration generator: select `Release` for both
+build and install rather than relying on `CMAKE_BUILD_TYPE`. Make dependency
+DLLs available beside the executable or on `PATH` before launching it.
+
+`WITH_CUDA=OFF` disables acidcam-gpu filters. To remove CUDA requirements from
+the renderer as well, use an MXVK package built without CUDA. CUDA filters and
+Deep Dream require their additional packages listed above. For OpenCV DNN
+CUDA inference, see the [DNN build notes](#dnn-and-generic-onnx-processing).
 
 ### Deep Dream support
 
