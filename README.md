@@ -330,8 +330,11 @@ builds both engines and the interface into a local prefix:
 ```
 
 `build-project-macos-pcons.py` is available for the corresponding Pcons build.
-Windows builds use an MSYS2 UCRT64 environment; see the Windows sections in the
-backend READMEs for exact commands and runtime layout.
+Windows builds support MSYS2 UCRT64 and native MSVC dependency workflows; see
+the [ACMX2 Windows guide](ACMX2/README.md#windows-msys2-ucrt64) and
+[ACMXVK MSVC/vcpkg guide](ACMXVK/README.md#windows-msvc-and-vcpkg) for commands
+and runtime layout. Build each backend's dependencies with the matching
+compiler and architecture.
 
 ## Optional acceleration and AI
 
@@ -341,14 +344,18 @@ the components needed by the target system:
 | Component | Build option | Main requirements |
 | --- | --- | --- |
 | acidcam-gpu filters | `-DWITH_CUDA=ON` | NVIDIA CUDA Toolkit and CUDA-enabled OpenCV |
-| OpenCV DNN effects | `-DWITH_OPENCV_DNN=ON` | OpenCV DNN and yaml-cpp |
-| Deep Dream | `-DWITH_DEEP_DREAM=ON` | NVIDIA CUDA, cuDNN, and CUDA-enabled LibTorch |
-| Stable Diffusion | `-DWITH_STABLE_DIFFUSION=ON` | libcurl, jsoncpp, and a compatible local `sd-server` |
+| OpenCV DNN effects | `-DWITH_OPENCV_DNN=ON` | OpenCV DNN; ACMX2 additionally requires yaml-cpp |
+| Deep Dream (ACMXVK) | `-DWITH_DEEP_DREAM=ON` | NVIDIA CUDA, cuDNN, and CUDA-enabled LibTorch |
+| Stable Diffusion (ACMXVK) | `-DWITH_STABLE_DIFFUSION=ON` | libcurl and a compatible local `sd-server`; jsoncpp is an ACMXVK core dependency |
 | Audio / MIDI | `-DAUDIO=ON`, `-DMIDI=ON` | RtAudio / RtMidi and the backend's media dependencies |
 
 For ACMX2, installing the CUDA Toolkit alone does not make a stock OpenCV build
 CUDA-capable. Use a CUDA-enabled OpenCV build or configure `WITH_CUDA=OFF`.
 ACMXVK's Deep Dream option is independent of the acidcam-gpu filter option.
+ACMXVK can also inherit CUDA requirements from its installed MXVK package
+with `WITH_CUDA=OFF`; use a non-CUDA MXVK build for a fully portable setup.
+See the [dependency catalog](DEPENDENCIES.md) for backend-specific packages
+and compile-time defaults.
 
 ## Downloads and documentation
 

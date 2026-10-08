@@ -279,15 +279,33 @@ for cache validation and control-value precedence.
 
 ## Building
 
+Install Qt 6 (or Qt 5.15) with Core, Gui, Widgets, Concurrent, and Network,
+FFmpeg development libraries (`libavcodec`, `libavformat`, and `libavutil`),
+and a C++17 compiler. The interface inspects media through FFmpeg libraries
+directly and does not require a separate `ffprobe` executable. Build the
+rendering engines separately and select their executable paths in the
+interface's backend properties.
+
+From the repository root:
+
 ```bash
-cd interface
-mkdir build && cd build
-cmake .. && make -j$(nproc) && sudo make install
+cmake -S ACMX2/interface -B build/interface -DCMAKE_BUILD_TYPE=Release
+cmake --build build/interface --parallel
+cmake --install build/interface --prefix "$HOME/.local"
 ```
+
+Choose an install prefix appropriate for your platform. On Windows with a
+Visual Studio generator, pass the vcpkg toolchain or Qt/FFmpeg dependency
+prefixes at configuration time, then use `--config Release` for both build
+and install. The build executable is under `build/interface/Release/` for
+that generator. Ensure Qt and FFmpeg runtime DLLs are available when launching.
+
+The standalone [MIDI-map utility](midi-map/) has its own CMake project and
+requires Qt 6 Widgets and RtMidi.
 
 ## Install
 
-`make install` places:
+`cmake --install` places:
 
 - `acmx2_interface` → `<prefix>/bin/`
 - `create_acmxvk_source_manifest` → `<prefix>/bin/`
