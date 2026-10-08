@@ -325,10 +325,24 @@ is unavailable. Explicit timestamps are supported by
 
 ## HDR output
 
-Set `options.hdr.enabled` to select the dedicated HDR path. It currently uses
-software `libx265`, HEVC Main10, and `yuv420p10le`. The output is tagged with
-BT.2020 primaries, BT.2020 non-constant-luminance matrix coefficients, and PQ
+Set `options.hdr.enabled` to select the dedicated HEVC Main10 HDR path.
+Automatic selection prefers `hevc_nvenc` with `p010le` input and falls back to
+software `libx265` with `yuv420p10le` if NVENC is unavailable or fails to open.
+NVENC requires an FFmpeg build with `hevc_nvenc` and a compatible NVIDIA GPU
+and driver; the software fallback requires an FFmpeg build with `libx265`.
+The output is tagged with BT.2020 primaries, BT.2020 non-constant-luminance
+matrix coefficients, and PQ
 by default. Setting `color_trc` to FFmpeg's HLG value produces HLG signaling.
+
+For HDR, `options.codec` accepts `auto`, `nvenc`, `hevc_nvenc`, or `h265_nvenc`
+to prefer NVENC with software fallback. Use `software`, `cpu`, `hevc`, `h265`,
+or `libx265` to select libx265 directly. Other codec selections are rejected
+because this path requires HEVC Main10. A pixel-format override that differs
+from the encoder's required format is ignored with a diagnostic.
+
+Quality uses NVENC CQ or libx265 CRF when no target bitrate is set. Presets are
+mapped for the selected encoder, including software fallback. Invalid extra
+encoder options fail the open operation rather than triggering fallback.
 
 ```cpp
 EncodeOptions options;
