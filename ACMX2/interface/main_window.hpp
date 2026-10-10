@@ -431,6 +431,8 @@ class MainWindow : public QMainWindow {
     int png_level = 6;
     bool generate_enabled = false;
     int generate_interval = 30;
+    QString png_frame_prefix;
+    int max_generated_frames = 0;
     bool watermark_enabled = false;
     QString watermark_text;
     int watermark_r = 255;

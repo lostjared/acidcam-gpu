@@ -3240,12 +3240,13 @@ namespace acmxvk {
         }
 
         std::uint64_t expected_frames = 0U;
-        if (options.repeat) {
+        if (options.duration > 0.0) {
             const auto duration_frames = static_cast<std::uint64_t>(std::ceil(options.duration * recording_fps));
             expected_frames = std::max<std::uint64_t>(1U, duration_frames);
-        } else if (options.duration > 0.0) {
-            const auto duration_frames = static_cast<std::uint64_t>(std::ceil(options.duration * recording_fps));
-            expected_frames = std::max<std::uint64_t>(1U, duration_frames);
+        }
+        if (options.png_output && options.max_generated_frames > 0) {
+            const auto png_limit_frames = (static_cast<std::uint64_t>(options.max_generated_frames) - 1U) * static_cast<std::uint64_t>(std::max(1, options.generate_interval)) + 1U;
+            expected_frames = expected_frames > 0U ? std::min(expected_frames, png_limit_frames) : png_limit_frames;
         }
         if (!options.repeat && source_kind == SourceKind::Video && video_duration_seconds > 0.0) {
             const auto source_frames = static_cast<std::uint64_t>(std::ceil(video_duration_seconds * recording_fps));
@@ -4481,7 +4482,7 @@ namespace acmxvk {
         if (options.png_output) {
             const int png_interval = std::max(1, options.generate_interval);
             if ((png_frame_count % static_cast<std::uint64_t>(png_interval)) == 0U) {
-                SnapshotWriter::savePng(frame_path(png_output_directory, generated_frame_count), output_pixels, recording_width, recording_height, options.png_level);
+                SnapshotWriter::savePng(frame_path(png_output_directory, generated_frame_count, options.png_frame_prefix), output_pixels, recording_width, recording_height, options.png_level);
                 if (png_interval > 1) {
                     std::cout << "acmxvk: Wrote PNG in sequence: " << generated_frame_count << "/" << png_frame_count << "\n";
                 }
@@ -4492,6 +4493,15 @@ namespace acmxvk {
 
         ++output_frame_count;
         emitHeadlessProgress(false);
+
+        if (options.png_output && options.max_generated_frames > 0 && generated_frame_count >= static_cast<std::uint64_t>(options.max_generated_frames)) {
+            std::cout << "acmxvk: maximum generated PNG count reached (" << generated_frame_count << ")\n";
+            recording_complete = true;
+            headless_progress_complete = options.headless;
+            setFrameReadbackEnabled(false);
+            exit();
+            return;
+        }
 
         if (options.duration > 0.0) {
             double output_duration = 0.0;
