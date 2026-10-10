@@ -2066,6 +2066,8 @@ void MainWindow::loadSessionSettings() {
     png_level = std::clamp(settings.value("interface/png_level", 6).toInt(), 1, 9);
     generate_enabled = settings.value("interface/generate_enabled", false).toBool();
     generate_interval = settings.value("interface/generate_interval", 30).toInt();
+    png_frame_prefix = settings.value("interface/png_frame_prefix", "").toString();
+    max_generated_frames = settings.value("interface/max_generated_frames", 0).toInt();
 
     encode_preset = settings.value("recording/preset", "medium").toString();
     encode_tune = settings.value("recording/tune", "").toString();
@@ -6114,6 +6116,8 @@ void MainWindow::cameraSettings() {
     png_level = settingsWindow.getPngLevel();
     generate_enabled = settingsWindow.isGenerateEnabled();
     generate_interval = settingsWindow.getGenerateInterval();
+    png_frame_prefix = settingsWindow.getPngFramePrefix();
+    max_generated_frames = settingsWindow.getMaxGeneratedFrames();
     encode_preset = settingsWindow.getEncodePreset();
     encode_tune = settingsWindow.getEncodeTune();
     encode_crf = settingsWindow.getEncodeCrf();
@@ -6418,6 +6422,12 @@ void MainWindow::runSelected() {
     const int effective_generate_interval = generate_enabled ? generate_interval : (active_backend == acmx2::Backend::Acmxvk && png_output ? 1 : 0);
     if (effective_generate_interval > 0) {
         arguments << "--generate" << QString::number(effective_generate_interval);
+        if (active_backend == acmx2::Backend::Acmxvk && !png_frame_prefix.isEmpty()) {
+            arguments << "--png-prefix" << png_frame_prefix;
+        }
+        if (active_backend == acmx2::Backend::Acmxvk && png_output && max_generated_frames > 0) {
+            arguments << "--max-generated-frames" << QString::number(max_generated_frames);
+        }
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {
@@ -6782,6 +6792,12 @@ bool MainWindow::buildRunArguments(QStringList &arguments, PendingAcmxvkAction r
     const int effective_generate_interval = generate_enabled ? generate_interval : (active_backend == acmx2::Backend::Acmxvk && png_output ? 1 : 0);
     if (effective_generate_interval > 0) {
         arguments << "--generate" << QString::number(effective_generate_interval);
+        if (active_backend == acmx2::Backend::Acmxvk && !png_frame_prefix.isEmpty()) {
+            arguments << "--png-prefix" << png_frame_prefix;
+        }
+        if (active_backend == acmx2::Backend::Acmxvk && png_output && max_generated_frames > 0) {
+            arguments << "--max-generated-frames" << QString::number(max_generated_frames);
+        }
     }
 
     if (watermark_enabled && !watermark_text.isEmpty()) {

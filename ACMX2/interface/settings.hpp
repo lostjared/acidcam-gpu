@@ -100,6 +100,10 @@ class SettingsWindow : public QDialog {
     bool isGenerateEnabled() const;
     /// @return Frame interval to pass with --generate.
     int getGenerateInterval() const;
+    /// @brief Return the filename prefix for ACMXVK generated PNG frames.
+    QString getPngFramePrefix() const;
+    /// @brief Return the maximum generated PNG count, or zero for unlimited.
+    int getMaxGeneratedFrames() const;
     /// @return True if 3D rendering mode is enabled.
     bool is3dEnabled() const;
     /// @return True if YUV mode is enabled for selected resolution.
@@ -269,6 +273,8 @@ class SettingsWindow : public QDialog {
     QComboBox *pngLevelComboBox = nullptr;
     QCheckBox *generateCheckBox = nullptr;
     QSpinBox *generateIntervalSpinBox = nullptr;
+    QLineEdit *png_frame_prefix_edit = nullptr;
+    QSpinBox *max_generated_frames_spin_box = nullptr;
     QScrollArea *settingsScrollArea = nullptr;
     QWidget *settingsContent = nullptr;
 

@@ -22,9 +22,9 @@ namespace acmxvk {
         }
     }
 
-    fs::path frame_path(const fs::path &directory, std::uint64_t index) {
+    fs::path frame_path(const fs::path &directory, std::uint64_t index, std::string_view prefix) {
         std::ostringstream filename;
-        filename << "frame-" << std::setfill('0') << std::setw(8) << index << ".png";
+        filename << prefix << "frame-" << std::setfill('0') << std::setw(8) << index << ".png";
         return directory / filename.str();
     }
 

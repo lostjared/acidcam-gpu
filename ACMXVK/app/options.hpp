@@ -35,6 +35,7 @@ namespace acmxvk {
         int autopilot_frames = 0;
         int autopilot_random_timeout = 0;
         int generate_interval = 0;
+        int max_generated_frames = 0;
         int png_level = 6;
         int cache_delay = 1;
         int build_parallel = 1;
@@ -187,6 +188,7 @@ namespace acmxvk {
         std::string playlist_file;
         std::string output_file;
         std::string png_output_directory;
+        std::string png_frame_prefix;
         std::string encode_preset = "medium";
         std::string encode_tune;
         std::string encode_codec = "auto";

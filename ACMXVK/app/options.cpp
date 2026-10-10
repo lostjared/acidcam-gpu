@@ -1192,6 +1192,22 @@ namespace acmxvk {
                     throw std::runtime_error("--png-level must be between 1 and 9");
                 }
             }
+            if (option == "--png-prefix") {
+                option_handled = true;
+                options.png_frame_prefix = optionValue(index, argc, argv, option);
+                for (const unsigned char character : options.png_frame_prefix) {
+                    if (character < 32 || std::string_view("<>:\"/\\|?*").find(character) != std::string_view::npos) {
+                        throw std::runtime_error("--png-prefix requires a filename prefix without path separators, control characters, or < > : \" | ? *");
+                    }
+                }
+            }
+            if (option == "--max-generated-frames") {
+                option_handled = true;
+                options.max_generated_frames = parseInteger(optionValue(index, argc, argv, option), option);
+                if (options.max_generated_frames < 0) {
+                    throw std::runtime_error("--max-generated-frames requires a nonnegative PNG count (0 = unlimited)");
+                }
+            }
             if (option == "--generate") {
                 option_handled = true;
                 options.generate_interval = parseInteger(optionValue(index, argc, argv, option), option);
@@ -1498,6 +1514,9 @@ namespace acmxvk {
         if (options.duration > 0.0 && options.output_file.empty() && !options.png_output) {
             throw std::runtime_error("--duration requires --output <file> or --png <directory>");
         }
+        if (options.max_generated_frames > 0 && !options.png_output) {
+            throw std::runtime_error("--max-generated-frames requires --png <directory>");
+        }
         if (options.png_output && options.input_file.empty()) {
             throw std::runtime_error("--png requires video --input");
         }
@@ -1551,9 +1570,9 @@ namespace acmxvk {
                 throw std::runtime_error("headless graphic processing requires --duration "
                                          "<seconds>");
             }
-            if (options.repeat && options.duration <= 0.0) {
+            if (options.repeat && options.duration <= 0.0 && options.max_generated_frames <= 0) {
                 throw std::runtime_error("--headless/--silent with --repeat requires --duration "
-                                         "<seconds>");
+                                         "<seconds> or --max-generated-frames <N>");
             }
             if (options.fullscreen || options.monitor != 0 || options.enable_vsync || options.enable_screenshot) {
                 throw std::runtime_error("--headless/--silent cannot be combined with "
@@ -1754,6 +1773,8 @@ namespace acmxvk {
                << "      --png <directory>       Write video frames as a PNG sequence in directory\n"
                << "      --png-level <1-9>       PNG compression: 1 fastest/largest, 9 slowest/smallest (default 6)\n"
                << "      --generate <N>          Save a PNG every N processed frames\n"
+               << "      --png-prefix <text>     Prepend text to generated PNG frame filenames\n"
+               << "      --max-generated-frames <N>  Exit after saving N PNGs (0 = unlimited)\n"
                << "  -e, --prefix <directory>   Directory for Z snapshots (default .)\n"
                << "  -b, --encode-crf <0-51>     Encoder quality (default 18)\n"
                << "      --bitrate <rate>        Target VBR, e.g. 10M (disables CRF/CQ)\n"
@@ -1835,7 +1856,8 @@ namespace acmxvk {
                << "      --silent                Alias for --headless\n"
                << "                              Requires video/image input and --output or --png\n"
                << "                              Cannot be combined with --pass-through\n"
-               << "                              Image input and --repeat require --duration\n"
+               << "                              Image input requires --duration; --repeat requires\n"
+               << "                              --duration or --max-generated-frames for PNG output\n"
                << "                              Interface shared memory is disabled\n\n"
                << "Output:\n"
                << "      --unbuffered           Flush stdout/stderr after each write for GUI capture\n"

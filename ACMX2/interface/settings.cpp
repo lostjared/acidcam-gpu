@@ -1,6 +1,6 @@
 #include "settings.hpp"
-#include "media-probe.hpp"
 #include "custom_style.hpp"
+#include "media-probe.hpp"
 #include <QApplication>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -856,6 +856,17 @@ void SettingsWindow::init() {
     generateIntervalSpinBox->setEnabled(false);
     connect(generateCheckBox, &QCheckBox::toggled, generateIntervalSpinBox, &QWidget::setEnabled);
 
+    png_frame_prefix_edit = new QLineEdit(this);
+    png_frame_prefix_edit->setPlaceholderText("e.g. run1-");
+    png_frame_prefix_edit->setToolTip("Prepended to generated PNG names: run1-frame-00000000.png. Use a different prefix for each run in the same folder.");
+    png_frame_prefix_edit->setVisible(activeBackend == acmx2::Backend::Acmxvk);
+
+    max_generated_frames_spin_box = new QSpinBox(this);
+    max_generated_frames_spin_box->setRange(0, 2147483647);
+    max_generated_frames_spin_box->setSpecialValueText("Unlimited");
+    max_generated_frames_spin_box->setToolTip("Exit ACMXVK gracefully after saving this many PNG files, including with Repeat enabled. Zero means unlimited.");
+    max_generated_frames_spin_box->setVisible(activeBackend == acmx2::Backend::Acmxvk);
+
     timeSpeedSpinBox = new QDoubleSpinBox(this);
     timeSpeedSpinBox->setRange(-100.0, 100.0);
     timeSpeedSpinBox->setSingleStep(0.1);
@@ -1099,6 +1110,14 @@ void SettingsWindow::init() {
     }
     outputGrid->addWidget(generateCheckBox, ++r, 0);
     outputGrid->addWidget(generateIntervalSpinBox, r, 1);
+    auto *png_frame_prefix_label = new QLabel("PNG frame prefix:", this);
+    png_frame_prefix_label->setVisible(activeBackend == acmx2::Backend::Acmxvk);
+    outputGrid->addWidget(png_frame_prefix_label, ++r, 0);
+    outputGrid->addWidget(png_frame_prefix_edit, r, 1);
+    auto *max_generated_frames_label = new QLabel("Max generated PNGs:", this);
+    max_generated_frames_label->setVisible(activeBackend == acmx2::Backend::Acmxvk);
+    outputGrid->addWidget(max_generated_frames_label, ++r, 0);
+    outputGrid->addWidget(max_generated_frames_spin_box, r, 1);
 
     // ── Encoding group ────────────────────────────────────────────────
     auto *encodingGroup = new QGroupBox("Encoding Quality", this);
@@ -1605,6 +1624,8 @@ void SettingsWindow::loadUiState() {
     generateCheckBox->setChecked(appSettings.value("interface/generate_enabled", false).toBool());
     generateIntervalSpinBox->setValue(appSettings.value("interface/generate_interval", 30).toInt());
     generateIntervalSpinBox->setEnabled(generateCheckBox->isChecked());
+    png_frame_prefix_edit->setText(appSettings.value("interface/png_frame_prefix", "").toString());
+    max_generated_frames_spin_box->setValue(appSettings.value("interface/max_generated_frames", 0).toInt());
 
     // Re-probe HDR for whatever video file we just restored so the checkbox
     // reflects the actual capabilities of the cached path.
@@ -1709,6 +1730,8 @@ void SettingsWindow::saveUiState() {
     }
     appSettings.setValue("interface/generate_enabled", generateCheckBox->isChecked());
     appSettings.setValue("interface/generate_interval", generateIntervalSpinBox->value());
+    appSettings.setValue("interface/png_frame_prefix", png_frame_prefix_edit->text());
+    appSettings.setValue("interface/max_generated_frames", max_generated_frames_spin_box->value());
     if (convertHdr10CheckBox) {
         appSettings.setValue("interface/convert_to_hdr10", convertHdr10CheckBox->isChecked());
     }
@@ -1807,6 +1830,10 @@ int SettingsWindow::getPngLevel() const { return pngLevelComboBox ? pngLevelComb
 bool SettingsWindow::isGenerateEnabled() const { return generateCheckBox && generateCheckBox->isChecked(); }
 
 int SettingsWindow::getGenerateInterval() const { return generateIntervalSpinBox ? generateIntervalSpinBox->value() : 0; }
+
+QString SettingsWindow::getPngFramePrefix() const { return png_frame_prefix_edit->text(); }
+
+int SettingsWindow::getMaxGeneratedFrames() const { return max_generated_frames_spin_box->value(); }
 
 bool SettingsWindow::isUseYuvEnabled() const { return useYuvCheckBox->isChecked(); }
 
@@ -1965,6 +1992,16 @@ QString SettingsWindow::getCameraName(int device_index) {
 }
 
 void SettingsWindow::acceptSettings() {
+    if (activeBackend == acmx2::Backend::Acmxvk) {
+        const QString prefix = getPngFramePrefix();
+        for (const QChar character : prefix) {
+            if (character.unicode() < 32 || QStringLiteral("<>:\"/\\|?*").contains(character)) {
+                QMessageBox::warning(this, "Invalid PNG frame prefix", "Use a filename prefix without path separators, control characters, or these characters: < > : \" | ? *");
+                png_frame_prefix_edit->setFocus();
+                return;
+            }
+        }
+    }
     QSize screen_resolution;
     if (!parse_even_resolution(screenResolutionComboBox->currentText(), screen_resolution)) {
         QMessageBox::warning(this,
