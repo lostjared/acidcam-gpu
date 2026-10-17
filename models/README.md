@@ -1,0 +1,195 @@
+# ONNX models for OpenCV DNN
+
+This directory contains neural image-to-image effects used by ACMX2's optional
+OpenCV DNN integration. The models transform video or camera frames into
+stylized images, which can then pass through the application's rendering and
+shader pipeline. ONNX (Open Neural Network Exchange) stores the exported neural
+network graph and learned weights; OpenCV loads that graph and performs
+inference at runtime. No training step is needed to use these files.
+
+The collection includes sketch, comic, color, pattern, and dream-like style
+variants, with names such as `pencil_sketch`, `comicbook`, `neon`, `bubble`,
+`matrix_epoch20`, and `glitch_dream`. Names identify effects or checkpoints;
+they do not mean that, for example, `cat.onnx` is an object detector or
+`words.onnx` is an OCR model. Training datasets, training recipes, and detailed
+per-model provenance are not documented here, so compare the visual output to
+choose a style.
+
+## Files and naming
+
+| File pattern | Purpose |
+| --- | --- |
+| `*.onnx` | Exported network graph and weights. |
+| `*.yaml` | Runtime configuration: model path, input tensor name when needed, and image preprocessing. |
+| `*-256.yaml`, `*-512.yaml`, `*-768.yaml`, `*-1024.yaml` | Inference-size presets that usually reference the same ONNX file. Availability varies by model. |
+| `*_epoch10.onnx`, `*_epoch15.onnx`, `*_epoch20.onnx` | Separately exported checkpoints identified by training epoch; each has its own configurations. A later epoch is not a guaranteed visual improvement. |
+
+Choose an existing YAML file rather than constructing its name: some models
+only have numbered configurations. Unsuffixed YAML files typically use
+512 x 512, but `test.yaml`, for example, uses 224 x 224. Read the configuration
+for the actual dimensions. `cat-720.onnx` is a separate model file;
+`cat-720-512.yaml` is a 512 x 512 preset for that model.
+
+The YAML's `model.path` is authoritative. In particular, `af_scale.yaml` and
+its numbered presets load `af_scale_sim.onnx`, not `af_scale.onnx`.
+Keep each configuration with the ONNX file it references when copying assets.
+Relative model paths are resolved against the YAML file's directory, not the
+shell's working directory.
+
+`deep-dream-inception-v3.pt.json` is metadata for the separate ACMXVK Deep Dream
+feature, not an ONNX model or a configuration accepted by `--onnx`.
+
+## Enable DNN support
+
+Install the normal [project dependencies](../DEPENDENCIES.md), OpenCV with its
+`dnn` module, and `yaml-cpp` for ACMX2's configuration parser. From the repository
+root, configure and build:
+
+```sh
+cmake -S ACMX2 -B build/acmx2-dnn -DWITH_CUDA=OFF -DWITH_OPENCV_DNN=ON
+cmake --build build/acmx2-dnn --config Release -j
+```
+
+Use the resulting `acmx2` executable (add its directory to `PATH`, or supply
+its full path) to check support:
+
+```sh
+acmx2 --check-dnn
+acmx2 --help
+```
+
+`--check-dnn` should print `OpenCV DNN: enabled`. DNN support defaults to off.
+`WITH_CUDA` controls the separate acidcam-gpu integration; OpenCV DNN can use
+its own CUDA backend if the installed OpenCV supports it, even when the
+application is built with `WITH_CUDA=OFF`. OpenCV CUDA inference requires an
+OpenCV build with CUDA, cuDNN, and `OPENCV_DNN_CUDA` enabled, plus compatible
+runtime libraries and hardware.
+
+## Run a model
+
+These examples assume the repository root is the working directory and
+`acmx2` is on `PATH`. Supply any other asset or rendering options required by
+your usual ACMX2 invocation.
+
+```sh
+# Preview a stylized video.
+acmx2 -i input.mp4 --onnx models/bubble-512.yaml
+
+# Write the processed video.
+acmx2 -i input.mp4 --onnx models/pencil_sketch-256.yaml -o output.mp4
+
+# Compare a different checkpoint at the same inference resolution.
+acmx2 -i input.mp4 --onnx models/matrix_epoch20-512.yaml
+```
+
+Pass the **YAML configuration** to `--onnx`, rather than the `.onnx` file.
+In the Qt launcher, enable **ONNX Model** in Settings and browse to the YAML
+configuration. The launcher disables these controls when the selected engine
+has no DNN support.
+
+ACMXVK also accepts these configurations through `--onnx <config.yaml>` when
+built with `-DWITH_OPENCV_DNN=ON`; see its
+[DNN usage and build notes](../ACMXVK/README.md#dnn-and-generic-onnx-processing)
+for the Vulkan-specific invocation and backend behavior.
+
+## Configuration and frame processing
+
+For example, [bubble-512.yaml](bubble-512.yaml) contains:
+
+```yaml
+model:
+  path: bubble.onnx
+  input: input
+preprocessing:
+  width: 512
+  height: 512
+  dynamic: true
+  alignment: 4
+  scale: 1.0
+  swap_rb: true
+  mean: [0.0, 0.0, 0.0]
+```
+
+The generic loader in [ACMX2/dnn.cpp](../ACMX2/dnn.cpp) performs these steps:
+
+1. Read the YAML and load `model.path` with OpenCV's `readNetFromONNX`.
+2. Resize the source frame and create a float32 input blob with
+   `blobFromImage`. The configuration controls scale, mean subtraction, and
+   BGR-to-RGB channel swapping. The supplied presets use `scale: 1.0`, zero
+   mean, and `swap_rb: true`; changing scale to `1/255` changes the model's
+   input range and may change the effect substantially.
+3. Set the named input tensor, if configured, and run `net.forward()` using
+   the selected CPU or CUDA backend.
+4. Convert the output into a display image, optionally smooth it, and resize
+   it back to the source frame dimensions. The resulting frame replaces the
+   input to subsequent rendering.
+
+The generic single-output path expects a float32 NCHW tensor with batch size
+one. One-channel output becomes grayscale; outputs with at least three
+channels use the first three planes as RGB. Values are min/max normalized to
+8-bit display color. For networks with multiple outputs, the wrapper selects
+the last unconnected output and handles it as a single spatial plane with a
+sigmoid before normalization. This is an image-effect wrapper, so arbitrary
+classification, detection, or other ONNX output formats need different code.
+
+`model.input` is optional, but must match the exported tensor name when set.
+Most numbered presets use `input`; the `test` numbered presets use
+`"onnx::Pad_0"`. Preserve these names when editing configurations.
+
+## Resolution and performance
+
+The numbered presets request square inference sizes of 256, 512, 768, or 1024
+pixels. Smaller inputs generally reduce inference time and memory use;
+larger inputs can preserve more detail. They do not change the output video's
+dimensions, because the model result is resized back to the source frame.
+Start with an available 256 or 512 preset and compare quality and frame rate
+on your hardware.
+
+With `dynamic: true`, dimensions are rounded to `alignment` (normally four).
+Setting one dimension to zero derives it from the source aspect ratio;
+setting both to zero uses the source dimensions. Two positive dimensions
+still request the specified shape, so a square preset resizes a widescreen
+frame to a square during inference. The model must support the requested
+shape; enabling `dynamic` in YAML alone does not make every ONNX graph accept
+arbitrary dimensions.
+
+Dynamic presets with both configured dimensions positive and at most 256
+automatically enable bilateral smoothing before upscaling. Override it in a
+configuration with, for example:
+
+```yaml
+postprocessing:
+  bilateral:
+    enabled: false
+```
+
+ACMX2 automatically benchmarks CPU against an available CUDA target on first
+inference and keeps the faster backend. It prefers the CUDA FP16 target when
+available for that comparison, otherwise CUDA FP32. Backend selection repeats
+if the resolved input size changes. To override selection, set
+`ACMX2_DNN_BACKEND` to `cpu`, `cuda`, or `cuda_fp16` before launching ACMX2.
+For example, in PowerShell:
+
+```powershell
+$env:ACMX2_DNN_BACKEND = 'cpu'
+acmx2 -i input.mp4 --onnx models/bubble-256.yaml
+Remove-Item Env:ACMX2_DNN_BACKEND
+```
+
+## Troubleshooting
+
+- **DNN disabled:** check `--check-dnn` and rebuild with `WITH_OPENCV_DNN=ON`.
+- **Model not found:** check `model.path` relative to the YAML directory and
+  copy the referenced ONNX file along with the configuration.
+- **Input-name or shape error:** retain the model's supplied tensor name and
+  try an existing preset before changing dimensions or preprocessing.
+- **Slow processing or high memory use:** try a smaller preset and inspect
+  the startup log for the selected backend. GPU rendering alone does not
+  mean OpenCV DNN inference runs on the GPU.
+- **Unexpected colors or contrast:** compare scale, mean, and `swap_rb` with
+  the supplied preset; output normalization also affects displayed contrast.
+
+The separate `--edge <model.onnx>` and `--human <model.onnx>` options use
+specialized DexiNed and PP-HumanSeg processing. They accept raw model paths
+and have different preprocessing and output handling from these generic
+style configurations.
