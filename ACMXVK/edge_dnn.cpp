@@ -510,7 +510,8 @@ namespace acmxvk::dnn {
         explicit Impl(const std::string &model_path) {
             if (!std::filesystem::is_regular_file(model_path)) {
                 throw std::runtime_error("edge model is not a regular file: " + model_path);
-    
+            }
+
             net = cv::dnn::readNetFromONNX(model_path);
 
             if (net.empty()) {
@@ -564,7 +565,7 @@ namespace acmxvk::dnn {
                 throw std::runtime_error("human segmentation model is not a regular file: " + model_path);
             }
 
-	    net = cv::dnn::readNetFromONNX(model_path);
+            net = cv::dnn::readNetFromONNX(model_path);
 
             if (net.empty()) {
                 throw std::runtime_error("PP-HumanSeg ONNX model is empty");

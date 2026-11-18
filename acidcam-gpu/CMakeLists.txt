@@ -216,10 +216,16 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ac-gpu
 )
 
 if(UNIX AND NOT APPLE)
-    set_target_properties(acidcam-gpu acidcam PROPERTIES
+    set_target_properties(acidcam-gpu PROPERTIES
         INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
         BUILD_WITH_INSTALL_RPATH FALSE
     )
+    if(EXAMPLES)
+        set_target_properties(acidcam PROPERTIES
+            INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
+            BUILD_WITH_INSTALL_RPATH FALSE
+        )
+    endif()
 endif()
 
 install(TARGETS acidcam-gpu
