@@ -234,11 +234,8 @@ namespace ac_dnn {
                     return;
                 }
 
-#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
-                net = cv::dnn::readNetFromONNX(modelPath.string(), cv::dnn::ENGINE_CLASSIC);
-#else
-                net = cv::dnn::readNetFromONNX(modelPath.string());
-#endif
+               net = cv::dnn::readNetFromONNX(modelPath.string());
+
                 if (net.empty())
                     return;
 
@@ -490,11 +487,8 @@ namespace ac_dnn {
         cv::Mat edge;
 
         explicit Impl(const std::string &modelPath) {
-#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
-            net = cv::dnn::readNetFromONNX(modelPath, cv::dnn::ENGINE_CLASSIC);
-#else
             net = cv::dnn::readNetFromONNX(modelPath);
-#endif
+
             if (net.empty())
                 throw std::runtime_error("DexiNed ONNX model is empty");
             outputName = lastOutputName(net);
@@ -541,11 +535,9 @@ namespace ac_dnn {
         cv::Mat previousMask;
 
         Impl(const std::string &modelPath, int backendId, int targetId) {
-#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
-            model = cv::dnn::readNetFromONNX(modelPath, cv::dnn::ENGINE_CLASSIC);
-#else
+
             model = cv::dnn::readNet(modelPath);
-#endif
+
             if (model.empty())
                 throw std::runtime_error("PP-HumanSeg model is empty");
             if (backendId >= 0 && targetId >= 0) {
