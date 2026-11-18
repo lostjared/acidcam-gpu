@@ -395,11 +395,8 @@ namespace acmxvk::dnn {
                 ++bilateral_diameter;
             }
 
-#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
-            net = cv::dnn::readNetFromONNX(model_path.string(), cv::dnn::ENGINE_CLASSIC);
-#else
             net = cv::dnn::readNetFromONNX(model_path.string());
-#endif
+
             if (net.empty()) {
                 throw std::runtime_error("generic ONNX model is empty");
             }
@@ -513,12 +510,9 @@ namespace acmxvk::dnn {
         explicit Impl(const std::string &model_path) {
             if (!std::filesystem::is_regular_file(model_path)) {
                 throw std::runtime_error("edge model is not a regular file: " + model_path);
-            }
-#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
-            net = cv::dnn::readNetFromONNX(model_path, cv::dnn::ENGINE_CLASSIC);
-#else
+    
             net = cv::dnn::readNetFromONNX(model_path);
-#endif
+
             if (net.empty()) {
                 throw std::runtime_error("DexiNed ONNX model is empty");
             }
@@ -569,11 +563,9 @@ namespace acmxvk::dnn {
             if (!std::filesystem::is_regular_file(model_path)) {
                 throw std::runtime_error("human segmentation model is not a regular file: " + model_path);
             }
-#if defined(CV_VERSION_MAJOR) && (CV_VERSION_MAJOR >= 5)
-            net = cv::dnn::readNetFromONNX(model_path, cv::dnn::ENGINE_CLASSIC);
-#else
-            net = cv::dnn::readNetFromONNX(model_path);
-#endif
+
+	    net = cv::dnn::readNetFromONNX(model_path);
+
             if (net.empty()) {
                 throw std::runtime_error("PP-HumanSeg ONNX model is empty");
             }
